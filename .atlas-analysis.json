@@ -1,0 +1,123 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "keejLib",
+  "projectDescription": "A beginner-friendly yet powerful C++ library for PROS robotics with advanced motion control and hardware abstractions",
+  "theme": "aspen",
+  "primaryColor": "#4680d8",
+  "lightColor": "#646464",
+  "darkColor": "#8a8a8a",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "installation", "quickstart"]
+          },
+          {
+            "group": "Hardware Abstractions",
+            "pages": [
+              "hardware/motor-groups",
+              "hardware/differential-groups",
+              "hardware/pistons",
+              "hardware/controller"
+            ]
+          },
+          {
+            "group": "Chassis Control",
+            "pages": [
+              "chassis/overview",
+              "chassis/setup",
+              "chassis/odometry",
+              "chassis/movements"
+            ]
+          },
+          {
+            "group": "Control Systems",
+            "pages": [
+              "control/pid",
+              "control/motion-profiling",
+              "control/exit-conditions",
+              "control/velocity-management"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "utilities/geometry",
+              "utilities/angles",
+              "utilities/timers",
+              "utilities/helpers"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Classes",
+            "pages": [
+              "api/chassis",
+              "api/drivetrain",
+              "api/controller",
+              "api/motor-groups",
+              "api/pistons"
+            ]
+          },
+          {
+            "group": "Control",
+            "pages": [
+              "api/pid",
+              "api/velocity-controller",
+              "api/exit-conditions"
+            ]
+          },
+          {
+            "group": "Data Types",
+            "pages": [
+              "api/types",
+              "api/constants"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Motor and differential motor group abstractions",
+    "Advanced chassis control with odometry and PID",
+    "Motion profiling with asymmetric trapezoidal profiles",
+    "Multiple autonomous movement algorithms (boomerang, move-to-point, pose control)",
+    "Controller wrapper with customizable drive curves and input handling",
+    "Piston control with toggle functionality",
+    "Comprehensive utility functions for angles, geometry, and timing",
+    "Exit condition system for autonomous routines"
+  ],
+  "publicApiSurface": [
+    "keejLib::Chassis",
+    "keejLib::DriveTrain",
+    "keejLib::Controller",
+    "keejLib::Pis",
+    "keejLib::PID",
+    "keejLib::VelocityController",
+    "keejLib::VelocityManager",
+    "keejLib::exit::Timeout",
+    "keejLib::exit::Range",
+    "keejLib::exit::Perp",
+    "keejLib::exit::Within",
+    "keejLib::exit::DistanceSensor",
+    "keejLib::Stopwatch",
+    "keejLib::Timer",
+    "keejLib::EMA",
+    "keejLib::Angle",
+    "keejLib::Pose",
+    "keejLib::Pt",
+    "keejLib::ChassConstants",
+    "keejLib::DriveTrainConstants",
+    "keejLib::PIDConstants",
+    "keejLib::ProfileParams",
+    "keejLib::MotionParams"
+  ]
+}
