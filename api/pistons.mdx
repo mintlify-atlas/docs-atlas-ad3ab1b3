@@ -1,0 +1,455 @@
+---
+title: Pistons
+description: Pneumatic piston control with state management
+---
+
+The `Pis` class (short for Pistons) provides simple control and state management for pneumatic pistons in VEX robotics.
+
+## Constructor
+
+```cpp
+Pis(std::vector<pros::adi::DigitalOut> p, bool s)
+```
+
+Creates a new Pis object to control one or more pneumatic solenoids.
+
+<ParamField path="p" type="std::vector<pros::adi::DigitalOut>" required>
+  Vector of ADI digital output ports controlling the pneumatic solenoids
+</ParamField>
+
+<ParamField path="s" type="bool" required>
+  Initial state of the pistons (true = extended, false = retracted)
+</ParamField>
+
+**Example:**
+```cpp
+// Single piston on port A
+keejLib::Pis clamp({pros::adi::DigitalOut('A')}, false);
+
+// Double-acting piston on ports A and B
+keejLib::Pis wings({
+    pros::adi::DigitalOut('A'),
+    pros::adi::DigitalOut('B')
+}, false);
+```
+
+## Methods
+
+### toggle
+
+```cpp
+void toggle()
+```
+
+Toggles the state of all pistons. If extended, they retract. If retracted, they extend.
+
+**Example:**
+```cpp
+keejLib::Pis clamp({pros::adi::DigitalOut('A')}, false);
+
+// Toggle on button press
+if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) {
+    clamp.toggle();  // Switch between open/closed
+}
+```
+
+### setState
+
+```cpp
+void setState(bool iState)
+```
+
+Sets the pistons to a specific state.
+
+<ParamField path="iState" type="bool" required>
+  Desired state (true = extended, false = retracted)
+</ParamField>
+
+**Example:**
+```cpp
+keejLib::Pis intake({pros::adi::DigitalOut('B')}, false);
+
+// Explicit state control
+intake.setState(true);   // Extend pistons
+pros::delay(500);
+intake.setState(false);  // Retract pistons
+```
+
+### getState
+
+```cpp
+bool getState()
+```
+
+Returns the current state of the pistons.
+
+**Returns:** Current state (true = extended, false = retracted)
+
+**Example:**
+```cpp
+keejLib::Pis wings({pros::adi::DigitalOut('C')}, false);
+
+// Check state before toggling
+if (!wings.getState()) {
+    pros::lcd::print(0, "Wings retracted");
+} else {
+    pros::lcd::print(0, "Wings extended");
+}
+```
+
+## Usage Patterns
+
+### Simple Toggle Control
+
+The most common use case is toggling pistons with button presses:
+
+```cpp
+keejLib::Pis clamp({pros::adi::DigitalOut('A')}, false);
+pros::Controller master(pros::E_CONTROLLER_MASTER);
+
+void opcontrol() {
+    while (true) {
+        // Toggle on new button press
+        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) {
+            clamp.toggle();
+        }
+        
+        pros::delay(10);
+    }
+}
+```
+
+### Hold-to-Activate
+
+Hold a button to keep pistons extended:
+
+```cpp
+keejLib::Pis intake({pros::adi::DigitalOut('B')}, false);
+
+void opcontrol() {
+    while (true) {
+        // Extend while held, retract when released
+        if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
+            intake.setState(true);
+        } else {
+            intake.setState(false);
+        }
+        
+        pros::delay(10);
+    }
+}
+```
+
+### Timed Actuation
+
+Extend pistons for a specific duration:
+
+```cpp
+keejLib::Pis launcher({pros::adi::DigitalOut('C')}, false);
+
+void fire() {
+    launcher.setState(true);   // Fire
+    pros::delay(500);          // Keep extended for 500ms
+    launcher.setState(false);  // Retract
+}
+```
+
+### State-Dependent Actions
+
+Perform different actions based on piston state:
+
+```cpp
+keejLib::Pis blocker({pros::adi::DigitalOut('D')}, false);
+
+void autonomous() {
+    // Start with blocker retracted
+    chassis.mtpoint({24, 0}, params);
+    
+    // Deploy blocker before turning
+    blocker.setState(true);
+    chassis.turn(90, params);
+    
+    // Drive with blocker extended
+    chassis.driveAngle(36, 90, params);
+    
+    // Retract blocker
+    blocker.setState(false);
+}
+```
+
+## Multi-Piston Systems
+
+### Independent Control
+
+Control multiple piston systems independently:
+
+```cpp
+keejLib::Pis leftWing({pros::adi::DigitalOut('A')}, false);
+keejLib::Pis rightWing({pros::adi::DigitalOut('B')}, false);
+keejLib::Pis clamp({pros::adi::DigitalOut('C')}, false);
+
+void opcontrol() {
+    while (true) {
+        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) {
+            leftWing.toggle();
+        }
+        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L2)) {
+            rightWing.toggle();
+        }
+        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1)) {
+            clamp.toggle();
+        }
+        
+        pros::delay(10);
+    }
+}
+```
+
+### Synchronized Control
+
+Control multiple pistons as a group:
+
+```cpp
+keejLib::Pis leftWing({pros::adi::DigitalOut('A')}, false);
+keejLib::Pis rightWing({pros::adi::DigitalOut('B')}, false);
+
+void toggleBothWings() {
+    leftWing.toggle();
+    rightWing.toggle();
+}
+
+void opcontrol() {
+    while (true) {
+        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) {
+            toggleBothWings();  // Deploy/retract both wings together
+        }
+        
+        pros::delay(10);
+    }
+}
+```
+
+### Sequential Actuation
+
+Activate pistons in sequence:
+
+```cpp
+keejLib::Pis stage1({pros::adi::DigitalOut('A')}, false);
+keejLib::Pis stage2({pros::adi::DigitalOut('B')}, false);
+keejLib::Pis stage3({pros::adi::DigitalOut('C')}, false);
+
+void deploySequence() {
+    stage1.setState(true);
+    pros::delay(200);
+    
+    stage2.setState(true);
+    pros::delay(200);
+    
+    stage3.setState(true);
+}
+
+void retractSequence() {
+    stage3.setState(false);
+    pros::delay(200);
+    
+    stage2.setState(false);
+    pros::delay(200);
+    
+    stage1.setState(false);
+}
+```
+
+## Double-Acting vs Single-Acting
+
+### Single-Acting Pistons
+
+Most VEX pistons are single-acting (one solenoid):
+
+```cpp
+// Single solenoid controls extend/retract
+keejLib::Pis singlePiston({pros::adi::DigitalOut('A')}, false);
+```
+
+- **true (HIGH)**: Extends piston
+- **false (LOW)**: Spring returns piston to retracted position
+
+### Double-Acting Pistons
+
+Some systems use double-acting pistons (two solenoids):
+
+```cpp
+// Two solenoids for positive control of both directions
+keejLib::Pis doubleActing({
+    pros::adi::DigitalOut('A'),  // Extend solenoid
+    pros::adi::DigitalOut('B')   // Retract solenoid
+}, false);
+```
+
+The Pis class sets all solenoids to the same state, so you'll need custom logic for true double-acting control:
+
+```cpp
+pros::adi::DigitalOut extendSolenoid('A');
+pros::adi::DigitalOut retractSolenoid('B');
+
+void extend() {
+    extendSolenoid.set_value(true);
+    retractSolenoid.set_value(false);
+}
+
+void retract() {
+    extendSolenoid.set_value(false);
+    retractSolenoid.set_value(true);
+}
+```
+
+## Pneumatics Best Practices
+
+### 1. Air Conservation
+
+Limit unnecessary piston actuations to conserve air:
+
+```cpp
+keejLib::Pis wings({pros::adi::DigitalOut('A')}, false);
+
+void opcontrol() {
+    bool lastButtonState = false;
+    
+    while (true) {
+        bool currentButton = master.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
+        
+        // Only toggle on button state change (not every loop)
+        if (currentButton && !lastButtonState) {
+            wings.toggle();
+        }
+        
+        lastButtonState = currentButton;
+        pros::delay(10);
+    }
+}
+```
+
+### 2. State Verification
+
+Verify state before critical operations:
+
+```cpp
+keejLib::Pis clamp({pros::adi::DigitalOut('B')}, false);
+
+void scoreRing() {
+    // Ensure clamp is closed before lifting
+    if (!clamp.getState()) {
+        clamp.setState(true);
+        pros::delay(100);  // Wait for piston to extend
+    }
+    
+    // Now safe to lift
+    lift.move(127);
+}
+```
+
+### 3. Initialization
+
+Set initial states during initialization:
+
+```cpp
+keejLib::Pis clamp({pros::adi::DigitalOut('A')}, false);
+keejLib::Pis wings({pros::adi::DigitalOut('B')}, false);
+
+void initialize() {
+    // Ensure all pistons start retracted
+    clamp.setState(false);
+    wings.setState(false);
+    
+    pros::delay(100);  // Let pneumatics stabilize
+}
+```
+
+### 4. Autonomous Safety
+
+Retract pistons before movements:
+
+```cpp
+void autonomous() {
+    // Retract all pistons at start
+    wings.setState(false);
+    clamp.setState(false);
+    pros::delay(200);
+    
+    // Safe to move
+    chassis.driveAngle(24, 0, params);
+    
+    // Deploy when needed
+    clamp.setState(true);
+}
+```
+
+## Complete Integration Example
+
+```cpp
+#include "main.h"
+#include "keejLib/chassis.h"
+#include "keejLib/piston.h"
+
+// Define pistons
+keejLib::Pis clamp({pros::adi::DigitalOut('A')}, false);
+keejLib::Pis leftWing({pros::adi::DigitalOut('B')}, false);
+keejLib::Pis rightWing({pros::adi::DigitalOut('C')}, false);
+
+void initialize() {
+    // Retract all pistons
+    clamp.setState(false);
+    leftWing.setState(false);
+    rightWing.setState(false);
+}
+
+void autonomous() {
+    keejLib::MotionParams params;
+    params.async = false;
+    
+    // Drive forward
+    chassis.driveAngle(24, 0, params);
+    
+    // Grab ring
+    clamp.setState(true);
+    pros::delay(300);
+    
+    // Turn
+    chassis.turn(90, params);
+    
+    // Deploy wings
+    leftWing.setState(true);
+    rightWing.setState(true);
+    
+    // Drive to goal
+    chassis.driveAngle(36, 90, params);
+    
+    // Release
+    clamp.setState(false);
+}
+
+void opcontrol() {
+    pros::Controller master(pros::E_CONTROLLER_MASTER);
+    
+    while (true) {
+        // Clamp toggle
+        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1)) {
+            clamp.toggle();
+            
+            // Haptic feedback
+            if (clamp.getState()) {
+                master.rumble(". ");  // Extended
+            } else {
+                master.rumble("..");   // Retracted
+            }
+        }
+        
+        // Wings toggle (both together)
+        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) {
+            leftWing.toggle();
+            rightWing.toggle();
+        }
+        
+        pros::delay(10);
+    }
+}
+```

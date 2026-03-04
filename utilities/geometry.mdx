@@ -1,0 +1,228 @@
+---
+title: "Geometry"
+description: "Point and Pose structures for representing positions and orientations in 2D space"
+---
+
+## Overview
+
+keejLib provides geometry primitives for representing positions and robot poses in 2D space. These structures are fundamental for odometry, path following, and motion control.
+
+## Pt Struct
+
+The `Pt` struct represents a 2D point with x and y coordinates.
+
+### Definition
+
+```cpp
+struct Pt {
+    double x = 0;
+    double y = 0;
+    
+    double dist(Pt a);
+};
+```
+
+### Methods
+
+<ParamField path="dist" type="double">
+  Calculates the Euclidean distance between this point and another point.
+  
+  **Parameters:**
+  - `a` (Pt): The other point
+  
+  **Returns:** Distance between the two points
+  
+  **Implementation:**
+  ```cpp
+  double Pt::dist(Pt a) {
+      return sqrt(pow(a.x - x, 2) + pow(a.y - y, 2));
+  }
+  ```
+</ParamField>
+
+### Usage Example
+
+```cpp
+keejLib::Pt p1 = {10.0, 5.0};
+keejLib::Pt p2 = {3.0, 1.0};
+
+double distance = p1.dist(p2);
+// distance = 8.06
+```
+
+## Pose Struct
+
+The `Pose` struct represents a robot's position and heading in 2D space.
+
+### Definition
+
+```cpp
+struct Pose {
+    Pt pos;
+    keejLib::Angle heading;
+};
+```
+
+### Fields
+
+<ParamField path="pos" type="Pt">
+  The robot's position in 2D space (x, y coordinates)
+</ParamField>
+
+<ParamField path="heading" type="Angle">
+  The robot's orientation angle
+</ParamField>
+
+### Usage Example
+
+```cpp
+keejLib::Pose robotPose;
+robotPose.pos = {24.0, 48.0};
+robotPose.heading = keejLib::Angle(90, keejLib::HEADING);
+
+// Access position
+double x = robotPose.pos.x;  // 24.0
+double y = robotPose.pos.y;  // 48.0
+
+// Access heading
+double heading = robotPose.heading.heading();  // 90.0
+```
+
+## Utility Functions
+
+### absoluteAngleToPoint
+
+Calculates the absolute heading angle from one point to another.
+
+```cpp
+Angle absoluteAngleToPoint(const Pt& pos, const Pt& point);
+```
+
+**Parameters:**
+- `pos` (Pt): Starting position
+- `point` (Pt): Target position
+
+**Returns:** Angle object representing the heading from pos to point
+
+**Example:**
+```cpp
+keejLib::Pt robotPos = {0.0, 0.0};
+keejLib::Pt target = {10.0, 10.0};
+
+keejLib::Angle angleToTarget = keejLib::absoluteAngleToPoint(robotPos, target);
+double heading = angleToTarget.heading();  // 45.0 degrees
+```
+
+### triangulate
+
+Calculates the intersection point of two headings (useful for sensor fusion).
+
+```cpp
+Pt triangulate(Pose a, Pose b);
+```
+
+**Parameters:**
+- `a` (Pose): First pose with position and heading
+- `b` (Pose): Second pose with position and heading
+
+**Returns:** Point where the two headings intersect
+
+**Example:**
+```cpp
+keejLib::Pose pose1 = {{0.0, 0.0}, keejLib::Angle(45, keejLib::HEADING)};
+keejLib::Pose pose2 = {{10.0, 0.0}, keejLib::Angle(135, keejLib::HEADING)};
+
+keejLib::Pt intersection = keejLib::triangulate(pose1, pose2);
+```
+
+### curvature
+
+Calculates the curvature between two poses (used for path following).
+
+```cpp
+double curvature(Pose pose, Pose other);
+```
+
+**Parameters:**
+- `pose` (Pose): Current robot pose
+- `other` (Pose): Target pose
+
+**Returns:** Curvature value (signed)
+
+**Note:** Credit to LemLib for the curvature calculation algorithm.
+
+### computeSide
+
+Determines which side of a line a point is on relative to a heading.
+
+```cpp
+int computeSide(const Pt& curr, const Pt& target, Angle heading);
+```
+
+**Parameters:**
+- `curr` (Pt): Current position
+- `target` (Pt): Target position
+- `heading` (Angle): Reference heading
+
+**Returns:** 1 or -1 indicating which side
+
+### translate
+
+Translates a point (mirrors x-coordinate).
+
+```cpp
+Pt translate(Pt a);
+```
+
+**Parameters:**
+- `a` (Pt): Point to translate
+
+**Returns:** Translated point with x-coordinate negated
+
+**Example:**
+```cpp
+keejLib::Pt original = {5.0, 10.0};
+keejLib::Pt translated = keejLib::translate(original);
+// translated = {-5.0, 10.0}
+```
+
+## Advanced Functions
+
+### calculateMaxSlipSpeed
+
+Calculates the maximum speed before wheel slippage occurs on a curved path.
+
+```cpp
+double calculateMaxSlipSpeed(const Pose& pose, const Pt& target, double drift);
+```
+
+**Parameters:**
+- `pose` (Pose): Current robot pose
+- `target` (Pt): Target point
+- `drift` (double): Drift coefficient (friction factor)
+
+**Returns:** Maximum safe speed
+
+### mtpAngleError
+
+Calculates the angle error for move-to-point operations.
+
+```cpp
+double mtpAngleError(const Pose& pose, const Pt& target, int dir);
+```
+
+**Parameters:**
+- `pose` (Pose): Current robot pose
+- `target` (Pt): Target point
+- `dir` (int): Direction (1 for forward, -1 for backward)
+
+**Returns:** Angle error in degrees
+
+**Example:**
+```cpp
+keejLib::Pose robotPose = {{0.0, 0.0}, keejLib::Angle(0, keejLib::HEADING)};
+keejLib::Pt target = {24.0, 24.0};
+
+double error = keejLib::mtpAngleError(robotPose, target, 1);
+// error = angle difference to point at target
+```

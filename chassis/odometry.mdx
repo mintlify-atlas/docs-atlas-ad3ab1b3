@@ -1,0 +1,336 @@
+---
+title: Odometry
+description: Position tracking system using tracking wheels and IMU
+---
+
+The keejLib odometry system provides real-time position tracking for autonomous navigation. It uses a two-wheel tracking system with an IMU to calculate the robot's position and heading on the field.
+
+## How Odometry Works
+
+Odometry tracks the robot's position by:
+
+1. Reading encoder deltas from tracking wheels
+2. Reading heading change from IMU
+3. Calculating local displacement (robot frame)
+4. Transforming to global coordinates (field frame)
+5. Updating pose at 10ms intervals
+
+The system implements standard **two-wheel odometry** math as seen in odom.cpp.
+
+## Tracking Wheel Setup
+
+### Two-Wheel Configuration
+
+keejLib uses a **vertical** and **horizontal** tracking wheel:
+
+```
+        Front
+          ↑
+    ┌─────┼─────┐
+    │     │     │
+ ───┼─────●─────┼───  Horizontal wheel (perpendicular to movement)
+    │     │     │
+    └─────┼─────┘
+          │
+     Vertical wheel (parallel to movement)
+```
+
+- **Vertical wheel**: Measures forward/backward movement
+- **Horizontal wheel**: Measures left/right (lateral) movement
+- Both wheels are **free-spinning** omni wheels
+- Rotation sensors read encoder counts
+
+### Physical Constants
+
+The `ChassConstants` struct defines tracking wheel geometry:
+
+```cpp
+struct ChassConstants {
+    double horizWidth;   // Distance from center to horizontal wheel
+    double vertWidth;    // Distance from center to vertical wheel
+    double trackDia;     // Wheel diameter (if both wheels same)
+    double vertDia;      // Vertical wheel diameter
+    double horizDia;     // Horizontal wheel diameter
+};
+```
+
+**Measuring offsets:**
+
+1. Measure distance from robot's center of rotation to vertical wheel (vertWidth)
+2. Measure distance from center to horizontal wheel (horizWidth)
+3. Measure wheel diameters (typically 2.75" omni wheels)
+
+```cpp
+ChassConstants chassConsts = {
+    .horizWidth = 5.5,   // 5.5" to the side
+    .vertWidth = 2.75,   // 2.75" forward
+    .trackDia = 2.75,
+    .vertDia = 2.75,
+    .horizDia = 2.75
+};
+```
+
+## Starting Odometry
+
+Call `startTracking()` once during initialization (odom.cpp:10):
+
+```cpp
+void initialize() {
+    // Wait for IMU calibration
+    pros::delay(2000);
+    
+    // Set starting pose
+    chassis.setPose({.pos = {0, 0}, .heading = keejLib::Angle(0, keejLib::HEADING)});
+    
+    // Start odometry task
+    chassis.startTracking();
+}
+```
+
+This creates a background RTOS task that continuously updates position.
+
+## Odometry Algorithm
+
+The core algorithm (odom.cpp:52) performs these steps:
+
+### 1. Read Sensors
+
+```cpp
+double rot = imu->get_heading();
+Angle currTheta = Angle(rot, AngleType::HEADING);
+double currVert = (vertEnc->get_position() / 100.0);
+double currHoriz = (horizEnc->get_position() / 100.0);
+```
+
+### 2. Calculate Deltas
+
+```cpp
+double dTheta = toRad(currTheta.error(prev.theta));
+double dVert = (angError(currVert, prev.vert) * M_PI * chassConsts.vertDia) / 360.0;
+double dHoriz = (angError(currHoriz, prev.horiz) * M_PI * chassConsts.horizDia) / 360.0;
+```
+
+Encoder positions are in centidegrees (100 = 1 degree), converted to distance.
+
+### 3. Local Displacement
+
+Calculate movement in robot's local frame (odom.cpp:97):
+
+```cpp
+double locX = 0;
+double locY = 0;
+
+if (dTheta == 0) {
+    locX = dx;
+    locY = dy;
+} else {
+    locX = 2 * sin(dTheta / 2) * (dx / dTheta + chassConsts.horizWidth);
+    locY = 2 * sin(dTheta / 2) * (dy / dTheta + chassConsts.vertWidth);
+}
+```
+
+This uses **arc motion** formulas to account for rotation during movement.
+
+### 4. Global Transform
+
+Transform local displacement to global field coordinates (odom.cpp:117):
+
+```cpp
+double avgHeading = (toRad(prev.theta.heading()) + dTheta / 2);
+
+pose.pos.x += locY * sin(avgHeading) - (locX * cos(avgHeading));
+pose.pos.y += locY * cos(avgHeading) + (locX * sin(avgHeading));
+pose.heading = currTheta;
+```
+
+Uses the **average heading** during the time step for more accurate integration.
+
+## Position Management
+
+### Get Current Position
+
+```cpp
+keejLib::Pose currentPose = chassis.getPose();
+std::cout << "X: " << currentPose.pos.x << std::endl;
+std::cout << "Y: " << currentPose.pos.y << std::endl;
+std::cout << "Heading: " << currentPose.heading.heading() << std::endl;
+```
+
+### Set Position
+
+Set the robot's position (e.g., at the start of autonomous):
+
+```cpp
+// Starting at (0, 0) facing 0 degrees
+chassis.setPose({
+    .pos = {0, 0},
+    .heading = keejLib::Angle(0, keejLib::HEADING)
+});
+
+// Or starting at a specific position
+chassis.setPose({
+    .pos = {-48, -48},
+    .heading = keejLib::Angle(90, keejLib::HEADING)
+});
+```
+
+### Field Coordinates
+
+keejLib uses standard field coordinates:
+
+```
+         Y (forward)
+         ↑
+         │
+         │
+  ───────┼─────── X (right)
+         │
+         │
+```
+
+- **X-axis**: Left (-) to right (+)
+- **Y-axis**: Back (-) to forward (+)  
+- **Heading**: 0° = forward, 90° = right, -90° = left
+- **Units**: Inches by default (use any unit consistently)
+
+## Wall Reset
+
+If you have a distance sensor, use `wallReset()` to correct drift (odom.cpp:125):
+
+```cpp
+// Reset position using wall 0 (left wall)
+chassis.wallReset(0, 10);  // Take 10 readings
+
+// Wall indices:
+// 0 = Left wall   (resets X)
+// 1 = Front wall  (resets Y)  
+// 2 = Right wall  (resets X)
+// 3 = Back wall   (resets Y)
+```
+
+This measures distance to the wall and corrects the corresponding coordinate.
+
+## Alternate Offsets
+
+For advanced use, measure and use empirical offsets (chassis.cpp:106):
+
+```cpp
+// Measure offsets by spinning robot
+auto offsets = chassis.measureOffsets(10);
+
+// Use measured offsets
+chassis.setAlternateOffsets(offsets);
+chassis.useAlternateOffsets(true);
+
+// Switch back to constants
+chassis.useAlternateOffsets(false);
+```
+
+The `measureOffsets()` function spins the robot and calculates actual geometric offsets from encoder readings.
+
+## Coordinate Translation
+
+keejLib supports automatic coordinate translation for blue/red alliance:
+
+```cpp
+// Set alliance color
+chassis.setColor(keejLib::blue);  // or keejLib::red
+
+// Now all movements use translated coordinates
+chassis.mtpoint({24, 24}, {});  // Automatically flipped for blue
+```
+
+This allows writing one autonomous routine that works for both alliance colors.
+
+## Pose Structure
+
+The `Pose` struct combines position and heading:
+
+```cpp
+struct Pose {
+    Pt pos;           // Position (x, y)
+    Angle heading;    // Robot heading
+};
+
+struct Pt {
+    double x;
+    double y;
+    
+    double dist(Pt other);  // Distance to another point
+};
+```
+
+## Angle Representation
+
+keejLib uses the `Angle` class for heading:
+
+```cpp
+// Create angle (two representations)
+Angle heading1(90, keejLib::HEADING);    // 90° as heading (-180 to 180)
+Angle heading2(M_PI/2, keejLib::RADIANS); // π/2 radians
+
+// Get values
+double deg = heading1.heading();     // Get as heading (-180 to 180)
+double rad = heading1.rad();         // Get as radians
+
+// Calculate error
+double error = target.error(current);  // Shortest angular error
+```
+
+## Debugging Position
+
+Print position during autonomous:
+
+```cpp
+while (true) {
+    auto pose = chassis.getPose();
+    std::printf("Pose: (%.2f, %.2f, %.2f°)\n", 
+        pose.pos.x, 
+        pose.pos.y, 
+        pose.heading.heading());
+    pros::delay(100);
+}
+```
+
+Or use graphical tools like LVGL or Okapilib's OdomDebug.
+
+## Common Issues
+
+### Position Drifts
+
+- Check tracking wheel mounting (must be rigid)
+- Verify wheel diameters are accurate
+- Ensure encoder cables are secure
+- Use `measureOffsets()` for precise values
+- Implement wall reset at strategic points
+
+### Heading Incorrect
+
+- IMU must be calibrated (wait 2+ seconds at startup)
+- IMU must be mounted flat and secure
+- Check IMU orientation matches code
+
+### Jittery Position
+
+- Check for loose tracking wheel mounting
+- Verify encoder wires aren't damaged
+- Increase odometry update rate if needed
+
+## PrevOdom Structure
+
+Internal state tracking for delta calculations (chassis.h:49):
+
+```cpp
+struct PrevOdom {
+    double vert;       // Previous vertical encoder value
+    double horiz;      // Previous horizontal encoder value
+    Angle theta;       // Previous heading
+};
+```
+
+This is managed internally and doesn't need user interaction.
+
+## Next Steps
+
+- [Setup](/chassis/setup) - Configure chassis constants
+- [Movements](/chassis/movements) - Use position for autonomous movements

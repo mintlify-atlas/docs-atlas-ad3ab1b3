@@ -1,0 +1,354 @@
+---
+title: "Timers"
+description: "Stopwatch and Timer classes for time-based control and delays"
+---
+
+## Overview
+
+keejLib provides two timing utilities: `Stopwatch` for measuring elapsed time and `Timer` for creating countdown timers. These are essential for timeout conditions, delay logic, and performance measurement.
+
+## Stopwatch Class
+
+The `Stopwatch` class measures elapsed time from a starting point, similar to a real stopwatch.
+
+### Constructor
+
+```cpp
+Stopwatch();
+```
+
+Creates a stopwatch that starts measuring time immediately upon construction.
+
+### Methods
+
+<ParamField path="reset" type="void">
+  Resets the stopwatch to zero and starts measuring time from now.
+  
+  ```cpp
+  void reset();
+  ```
+  
+  **Example:**
+  ```cpp
+  keejLib::Stopwatch timer;
+  // ... some code ...
+  timer.reset();  // Start measuring from now
+  ```
+</ParamField>
+
+<ParamField path="elapsed" type="int">
+  Returns the time elapsed since the stopwatch was created or last reset.
+  
+  ```cpp
+  int elapsed();
+  ```
+  
+  **Returns:** Elapsed time in milliseconds
+  
+  **Example:**
+  ```cpp
+  keejLib::Stopwatch timer;
+  pros::delay(1000);
+  int ms = timer.elapsed();  // ~1000 ms
+  ```
+</ParamField>
+
+### Usage Examples
+
+**Basic Timing:**
+```cpp
+keejLib::Stopwatch stopwatch;
+
+// Measure loop performance
+while (true) {
+    stopwatch.reset();
+    
+    // Your control code here
+    chassis.updateOdometry();
+    chassis.updateControl();
+    
+    int loopTime = stopwatch.elapsed();
+    printf("Loop time: %d ms\n", loopTime);
+    
+    pros::delay(10);
+}
+```
+
+**Timeout Condition:**
+```cpp
+keejLib::Stopwatch timer;
+
+while (timer.elapsed() < 3000) {  // Run for 3 seconds
+    chassis.drive(127);
+    pros::delay(10);
+}
+chass.stop();
+```
+
+**Performance Measurement:**
+```cpp
+void measureAutonPerformance() {
+    keejLib::Stopwatch autonTimer;
+    
+    // Run autonomous routine
+    myAutonRoutine();
+    
+    int totalTime = autonTimer.elapsed();
+    printf("Auton completed in %d ms\n", totalTime);
+}
+```
+
+## Timer Class
+
+The `Timer` class provides countdown timer functionality with start/stop control. Unlike Stopwatch, Timer must be explicitly started and checks if a timeout duration has been reached.
+
+### Constructor
+
+```cpp
+Timer(int timeout);
+```
+
+**Parameters:**
+- `timeout` (int): Timeout duration in milliseconds
+
+**Example:**
+```cpp
+keejLib::Timer timer(2000);  // 2 second timer
+```
+
+### Methods
+
+<ParamField path="start" type="void">
+  Starts the timer. If already running, this has no effect.
+  
+  ```cpp
+  void start();
+  ```
+  
+  **Example:**
+  ```cpp
+  keejLib::Timer timer(1000);
+  timer.start();  // Begin countdown
+  ```
+</ParamField>
+
+<ParamField path="stop" type="void">
+  Stops the timer. After stopping, `done()` will return false.
+  
+  ```cpp
+  void stop();
+  ```
+</ParamField>
+
+<ParamField path="reset" type="void">
+  Resets the timer to zero while keeping it in its current state (running or stopped).
+  
+  ```cpp
+  void reset();
+  ```
+  
+  **Example:**
+  ```cpp
+  timer.reset();  // Restart countdown from current time
+  ```
+</ParamField>
+
+<ParamField path="set" type="void">
+  Changes the timeout duration.
+  
+  ```cpp
+  void set(int timeout);
+  ```
+  
+  **Parameters:**
+  - `timeout` (int): New timeout duration in milliseconds
+  
+  **Example:**
+  ```cpp
+  timer.set(5000);  // Change to 5 second timeout
+  ```
+</ParamField>
+
+<ParamField path="done" type="bool">
+  Checks if the timeout duration has been reached.
+  
+  ```cpp
+  bool done();
+  ```
+  
+  **Returns:** 
+  - `true` if timer is running and timeout has elapsed
+  - `false` if timer is stopped or timeout hasn't elapsed
+  
+  **Example:**
+  ```cpp
+  if (timer.done()) {
+      printf("Timeout reached!\n");
+  }
+  ```
+</ParamField>
+
+### Usage Examples
+
+**Simple Timeout:**
+```cpp
+keejLib::Timer timeout(2000);  // 2 second timeout
+timeout.start();
+
+while (!timeout.done()) {
+    chassis.drive(127);
+    pros::delay(10);
+}
+chass.stop();
+```
+
+**Exit Condition with Multiple Checks:**
+```cpp
+keejLib::Timer moveTimer(3000);
+moveTimer.start();
+
+while (!moveTimer.done()) {
+    // Update control
+    chassis.moveToPoint(target);
+    
+    // Check if we've reached the target
+    double error = chassis.getDistanceToTarget();
+    if (error < 2.0) {
+        break;  // Exit early if close enough
+    }
+    
+    pros::delay(10);
+}
+```
+
+**State Machine with Timer:**
+```cpp
+enum State { INTAKE, WAIT, SHOOT };
+State currentState = INTAKE;
+keejLib::Timer stateTimer(1000);
+
+void autonomous() {
+    while (true) {
+        switch (currentState) {
+            case INTAKE:
+                intake.spin(127);
+                if (intakeSensor.get_value()) {
+                    currentState = WAIT;
+                    stateTimer.set(500);
+                    stateTimer.start();
+                }
+                break;
+                
+            case WAIT:
+                intake.stop();
+                if (stateTimer.done()) {
+                    currentState = SHOOT;
+                    stateTimer.stop();
+                }
+                break;
+                
+            case SHOOT:
+                shooter.fire();
+                currentState = INTAKE;
+                break;
+        }
+        pros::delay(10);
+    }
+}
+```
+
+**Controlled Start/Stop:**
+```cpp
+keejLib::Timer driveTimer(5000);
+
+// Start timer when button pressed
+if (controller.get_digital(PROS_E_CONTROLLER_DIGITAL_A)) {
+    driveTimer.start();
+}
+
+// Stop timer early if needed
+if (controller.get_digital(PROS_E_CONTROLLER_DIGITAL_B)) {
+    driveTimer.stop();
+}
+
+// Drive while timer is running and not done
+if (!driveTimer.done()) {
+    chassis.drive(127);
+} else {
+    chassis.stop();
+}
+```
+
+## Comparison: Stopwatch vs Timer
+
+| Feature | Stopwatch | Timer |
+|---------|-----------|-------|
+| **Purpose** | Measure elapsed time | Countdown with timeout check |
+| **Auto-start** | Yes (on construction) | No (requires `start()`) |
+| **State control** | Always running | Can be started/stopped |
+| **Primary method** | `elapsed()` | `done()` |
+| **Best for** | Performance measurement, timing loops | Timeout conditions, delays |
+
+## Common Patterns
+
+### Exit Condition: Timeout OR Success
+
+```cpp
+keejLib::Timer timeout(3000);
+timeout.start();
+
+while (!timeout.done()) {
+    chassis.turnToAngle(targetAngle);
+    
+    if (fabs(chassis.getAngleError()) < 2.0) {
+        break;  // Success - exit early
+    }
+    
+    pros::delay(10);
+}
+// Either timed out or succeeded
+```
+
+### Settle Time
+
+```cpp
+keejLib::Timer settleTimer(200);
+bool settling = false;
+
+while (true) {
+    double error = chassis.getError();
+    
+    if (fabs(error) < 2.0) {
+        if (!settling) {
+            settling = true;
+            settleTimer.start();
+        }
+        if (settleTimer.done()) {
+            break;  // Settled for 200ms
+        }
+    } else {
+        settling = false;
+        settleTimer.stop();
+    }
+    
+    pros::delay(10);
+}
+```
+
+### Rate Limiting
+
+```cpp
+keejLib::Stopwatch loopTimer;
+
+while (true) {
+    int loopStart = loopTimer.elapsed();
+    
+    // Your code here
+    updateControls();
+    
+    int loopTime = loopTimer.elapsed() - loopStart;
+    if (loopTime < 10) {
+        pros::delay(10 - loopTime);  // Maintain 10ms loop time
+    }
+}
+```

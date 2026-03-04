@@ -1,0 +1,337 @@
+---
+title: "Angles"
+description: "Angle class and conversion utilities for handling orientations in robotics"
+---
+
+## Overview
+
+keejLib provides a robust `Angle` class that handles angle conversions between radians, degrees, and VEX heading conventions. This eliminates common angle conversion bugs and provides a unified interface for angle operations.
+
+## AngleType Enum
+
+Specifies the format of an angle value.
+
+```cpp
+enum AngleType {
+    RAD,      // Radians (standard mathematical convention)
+    DEG,      // Degrees (0-360)
+    HEADING   // VEX heading (0° = North, clockwise positive)
+};
+```
+
+<Info>
+  VEX heading uses 0° as north (positive y-axis) with clockwise rotation being positive, which differs from standard mathematical angles where 0° is east (positive x-axis) with counterclockwise rotation being positive.
+</Info>
+
+## Angle Class
+
+The `Angle` class stores angles internally as radians in standard mathematical convention and provides conversions to different formats.
+
+### Constructors
+
+```cpp
+Angle();
+Angle(double angle, AngleType type);
+```
+
+**Default Constructor:**
+Creates an angle initialized to 0 radians.
+
+**Parameterized Constructor:**
+- `angle` (double): The angle value
+- `type` (AngleType): The format of the angle (RAD, DEG, or HEADING)
+
+### Usage Examples
+
+```cpp
+// Create angles using different formats
+keejLib::Angle angle1(M_PI, keejLib::RAD);           // π radians
+keejLib::Angle angle2(180.0, keejLib::DEG);          // 180 degrees
+keejLib::Angle angle3(90.0, keejLib::HEADING);       // 90° VEX heading (East)
+
+// Default constructor
+keejLib::Angle angle4;  // 0 radians
+```
+
+## Methods
+
+### Conversion Methods
+
+<ParamField path="rad" type="double">
+  Returns the angle in radians (standard mathematical convention).
+  
+  ```cpp
+  double rad();
+  ```
+  
+  **Example:**
+  ```cpp
+  keejLib::Angle angle(90.0, keejLib::DEG);
+  double radians = angle.rad();  // 1.5708 (π/2)
+  ```
+</ParamField>
+
+<ParamField path="deg" type="double">
+  Returns the angle in degrees (0-360).
+  
+  ```cpp
+  double deg();
+  ```
+  
+  **Example:**
+  ```cpp
+  keejLib::Angle angle(M_PI, keejLib::RAD);
+  double degrees = angle.deg();  // 180.0
+  ```
+</ParamField>
+
+<ParamField path="heading" type="double">
+  Returns the angle in VEX heading convention (0° = North, clockwise positive).
+  
+  ```cpp
+  double heading();
+  ```
+  
+  **Example:**
+  ```cpp
+  keejLib::Angle angle(M_PI/2, keejLib::RAD);
+  double head = angle.heading();  // 0.0 (pointing north)
+  ```
+</ParamField>
+
+### Arithmetic Operators
+
+<ParamField path="operator+" type="Angle">
+  Adds two angles together.
+  
+  ```cpp
+  Angle operator+(Angle& other);
+  ```
+  
+  **Example:**
+  ```cpp
+  keejLib::Angle a1(45, keejLib::HEADING);
+  keejLib::Angle a2(90, keejLib::HEADING);
+  keejLib::Angle sum = a1 + a2;
+  // sum.heading() = 135°
+  ```
+</ParamField>
+
+<ParamField path="operator+=" type="void">
+  Adds another angle to this angle in place.
+  
+  ```cpp
+  void operator+=(Angle& other);
+  ```
+</ParamField>
+
+<ParamField path="operator-" type="Angle">
+  Subtracts one angle from another.
+  
+  ```cpp
+  Angle operator-(Angle& other);
+  ```
+</ParamField>
+
+<ParamField path="operator/" type="Angle">
+  Divides an angle by a scalar.
+  
+  ```cpp
+  Angle operator/(double b);
+  ```
+  
+  **Example:**
+  ```cpp
+  keejLib::Angle angle(180, keejLib::DEG);
+  keejLib::Angle half = angle / 2.0;
+  // half.deg() = 90°
+  ```
+</ParamField>
+
+<ParamField path="operator==" type="bool">
+  Compares angle with a double value (in radians).
+  
+  ```cpp
+  bool operator==(double b);
+  ```
+</ParamField>
+
+### Error Calculation
+
+<ParamField path="error" type="double">
+  Calculates the minimum angular error between this angle and another, taking wrapping into account.
+  
+  ```cpp
+  double error(Angle current);
+  ```
+  
+  **Parameters:**
+  - `current` (Angle): The current angle to compare against
+  
+  **Returns:** Signed error in degrees (-180 to 180)
+  
+  **Example:**
+  ```cpp
+  keejLib::Angle target(10, keejLib::HEADING);
+  keejLib::Angle current(350, keejLib::HEADING);
+  double err = target.error(current);
+  // err = 20° (not 340°, takes shortest path)
+  ```
+</ParamField>
+
+### Direction Reversal
+
+<ParamField path="reverseDir" type="Angle">
+  Returns an angle pointing in the opposite direction (adds 180°).
+  
+  ```cpp
+  Angle reverseDir();
+  ```
+  
+  **Example:**
+  ```cpp
+  keejLib::Angle forward(0, keejLib::HEADING);  // North
+  keejLib::Angle backward = forward.reverseDir();
+  // backward.heading() = 180° (South)
+  ```
+</ParamField>
+
+## Utility Functions
+
+### toRad
+
+Converts degrees to radians.
+
+```cpp
+double toRad(double deg);
+```
+
+**Example:**
+```cpp
+double radians = keejLib::toRad(180.0);  // π
+```
+
+### toDeg
+
+Converts radians to degrees.
+
+```cpp
+double toDeg(double rad);
+```
+
+**Example:**
+```cpp
+double degrees = keejLib::toDeg(M_PI);  // 180.0
+```
+
+### toStandard
+
+Converts VEX heading to standard mathematical angle (in radians).
+
+```cpp
+double toStandard(double deg);
+```
+
+**Parameters:**
+- `deg` (double): Angle in VEX heading convention
+
+**Returns:** Angle in radians (standard convention)
+
+### fromStandard
+
+Converts standard mathematical angle (in radians) to VEX heading.
+
+```cpp
+double fromStandard(double rad);
+```
+
+**Parameters:**
+- `rad` (double): Angle in radians (standard convention)
+
+**Returns:** Angle in VEX heading convention (degrees)
+
+### dirToSpin
+
+Determines the optimal rotation direction to reach a target angle.
+
+```cpp
+int dirToSpin(double target, double current);
+```
+
+**Parameters:**
+- `target` (double): Target heading (degrees)
+- `current` (double): Current heading (degrees)
+
+**Returns:** 
+- `1` for clockwise rotation
+- `-1` for counterclockwise rotation
+
+**Example:**
+```cpp
+int direction = keejLib::dirToSpin(10.0, 350.0);
+// direction = 1 (clockwise is shorter: 20° vs 340°)
+```
+
+### angError
+
+Calculates the minimum signed angular error between two angles.
+
+```cpp
+double angError(double target, double current);
+```
+
+**Parameters:**
+- `target` (double): Target heading (degrees)
+- `current` (double): Current heading (degrees)
+
+**Returns:** Signed error in degrees (accounts for wrapping)
+
+**Example:**
+```cpp
+double error = keejLib::angError(10.0, 350.0);
+// error = 20.0 (shortest angular distance)
+
+error = keejLib::angError(350.0, 10.0);
+// error = -20.0 (negative indicates opposite direction)
+```
+
+### reverseDir
+
+Returns the opposite heading (adds 180° with wrapping).
+
+```cpp
+double reverseDir(double heading);
+```
+
+**Example:**
+```cpp
+double opposite = keejLib::reverseDir(45.0);  // 225.0
+opposite = keejLib::reverseDir(270.0);        // 90.0
+```
+
+## Complete Example
+
+```cpp
+// Create a robot heading
+keejLib::Angle robotHeading(0, keejLib::HEADING);  // Facing north
+
+// Calculate target heading to a point
+keejLib::Pt robotPos = {0.0, 0.0};
+keejLib::Pt target = {10.0, 10.0};
+keejLib::Angle targetHeading = keejLib::absoluteAngleToPoint(robotPos, target);
+
+// Calculate error
+double error = targetHeading.error(robotHeading);
+
+// Determine turn direction
+int direction = keejLib::dirToSpin(targetHeading.heading(), robotHeading.heading());
+
+if (direction > 0) {
+    // Turn clockwise
+} else {
+    // Turn counterclockwise
+}
+
+// Get reverse direction for backing up
+keejLib::Angle reverseHeading = targetHeading.reverseDir();
+```

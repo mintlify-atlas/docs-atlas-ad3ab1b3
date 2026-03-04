@@ -1,122 +1,105 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "keejLib",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#4680d8",
+    "light": "#646464",
+    "dark": "#8a8a8a"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "https://media.brand.dev/9cb664da-4c0c-4267-8b3b-e0baede2bc85.jpg",
+  "logo": {
+    "light": "https://media.brand.dev/ebfae55a-9d3f-4c2c-97e9-c4c82f097c55.png",
+    "dark": "https://media.brand.dev/ebfae55a-9d3f-4c2c-97e9-c4c82f097c55.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/8pxl/keejLib"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/8pxl/keejLib"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
+            "pages": ["introduction", "installation", "quickstart"]
+          },
+          {
+            "group": "Hardware Abstractions",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "hardware/motor-groups",
+              "hardware/differential-groups",
+              "hardware/pistons",
+              "hardware/controller"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Chassis Control",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "chassis/overview",
+              "chassis/setup",
+              "chassis/odometry",
+              "chassis/movements"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Control Systems",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "control/pid",
+              "control/motion-profiling",
+              "control/exit-conditions",
+              "control/velocity-management"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Utilities",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "utilities/geometry",
+              "utilities/angles",
+              "utilities/timers",
+              "utilities/helpers"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Core Classes",
             "pages": [
-              "api-reference/introduction"
+              "api/chassis",
+              "api/drivetrain",
+              "api/controller",
+              "api/motor-groups",
+              "api/pistons"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Control",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/pid",
+              "api/velocity-controller",
+              "api/exit-conditions"
+            ]
+          },
+          {
+            "group": "Data Types",
+            "pages": [
+              "api/types",
+              "api/constants"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

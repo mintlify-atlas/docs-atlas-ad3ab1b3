@@ -1,0 +1,489 @@
+---
+title: Movement Commands
+description: Complete reference for keejLib chassis movement methods
+---
+
+The Chassis class provides several movement primitives for autonomous navigation. All movements support asynchronous execution and customizable parameters.
+
+## Movement Overview
+
+| Method | Purpose | Best For |
+|--------|---------|----------|
+| `turn()` | Turn to absolute heading | Precise heading control |
+| `turnTo()` | Turn to face a point | Quick reorientation |
+| `driveAngle()` | Drive straight distance | Simple forward/back |
+| `mtpoint()` | Move to point | Fast point-to-point |
+| `mtpose()` | Move to pose | Ending at specific heading |
+| `swingTo()` | Arc turn to point | Tight spaces |
+| `moveWithin()` | Move near a point | Approach without stopping |
+| `linTo()` | Linear approach | Not yet implemented |
+
+## Basic Movements
+
+### turn()
+
+Turn to an absolute heading using PID control (1dpid.cpp:7).
+
+**Signature:**
+```cpp
+void turn(double angle, MotionParams params);
+```
+
+**Parameters:**
+- `angle` - Target heading in degrees (-180 to 180)
+- `params` - Motion parameters
+
+**Example:**
+```cpp
+// Turn to face 90° (right)
+chassis.turn(90, {
+    .timeout = 2000,
+    .vMax = 100,
+    .exit = new exit::Range(1.5, 20)  // Settle within 1.5° for 20ms
+});
+
+// Turn to face forward (0°)
+chassis.turn(0, {});
+
+// Async turn
+chassis.turn(45, {.async = true});
+chassis.waitUntilSettled();
+```
+
+**Default exit:** `exit::Range(1.5, 20)` - within 1.5° for 20ms
+
+### turnTo()
+
+Turn to face a specific point on the field (1dpid.cpp:36).
+
+**Signature:**
+```cpp
+double turnTo(Pt target, MotionParams params);
+```
+
+**Parameters:**
+- `target` - Point to face (x, y)
+- `params` - Motion parameters
+
+**Returns:** Final heading angle in degrees
+
+**Example:**
+```cpp
+// Turn to face point (24, 24)
+chassis.turnTo({24, 24}, {});
+
+// Turn to face point in reverse
+chassis.turnTo({0, -12}, {.reverse = true});
+
+// Get final heading
+double heading = chassis.turnTo({48, 0}, {});
+std::cout << "Facing: " << heading << "°" << std::endl;
+```
+
+**Note:** Automatically updates target as robot position changes.
+
+### driveAngle()
+
+Drive straight for a distance while maintaining heading (2dpid.cpp:71).
+
+**Signature:**
+```cpp
+void driveAngle(double dist, double angle, MotionParams params, bool absolute = false);
+```
+
+**Parameters:**
+- `dist` - Distance to travel (positive = forward, negative = back)
+- `angle` - Heading to maintain
+- `params` - Motion parameters
+- `absolute` - If false, tares encoders before movement
+
+**Example:**
+```cpp
+// Drive forward 24 inches at 0°
+chassis.driveAngle(24, 0, {.vMin = 20, .slew = 2});
+
+// Drive backward 12 inches
+chassis.driveAngle(-12, 0, {});
+
+// Drive with speed limits
+chassis.driveAngle(36, 90, {
+    .vMin = 15,
+    .vMax = 100,
+    .slew = 3
+});
+
+// Chain movements (don't stop between)
+chassis.driveAngle(24, 0, {.vMin = 20});
+chassis.driveAngle(12, 0, {.vMin = 0});  // Stop at end
+```
+
+**Default exit:** `exit::Range(20, 20)` - within 20 units for 20ms
+
+## Advanced Movements
+
+### mtpoint()
+
+**Move to point** using Boomerang controller - fast curved path (2dpid.cpp:130).
+
+**Signature:**
+```cpp
+void mtpoint(Pt target, MotionParams params);
+```
+
+**Parameters:**
+- `target` - Target point (x, y)
+- `params` - Motion parameters
+
+**Example:**
+```cpp
+// Move to (24, 24)
+chassis.mtpoint({24, 24}, {
+    .timeout = 3000,
+    .vMin = 0,
+    .vMax = 127,
+    .settleRange = 3,
+    .slew = 4
+});
+
+// Move in reverse
+chassis.mtpoint({0, -12}, {.reverse = true});
+
+// Move to within 6" (don't fully reach)
+chassis.mtpoint({48, 48}, {.within = 6});
+
+// Enable debug output
+chassis.mtpoint({12, 24}, {.debug = true});
+```
+
+**Features:**
+- Cosine scaling of linear error based on angular error
+- Automatic side detection (CW vs CCW path)
+- Dynamic velocity limiting to prevent wheel slip
+- Perpendicular line exit for chaining
+
+**Default exit:** `exit::Range(3, 20)` - within 3" for 20ms
+
+### mtpose()
+
+**Move to pose** - reaches target position AND heading (2dpid.cpp:205).
+
+**Signature:**
+```cpp
+void mtpose(Pose target, double dLead, MotionParams params, double gLead = -1, double gSettle = 10);
+```
+
+**Parameters:**
+- `target` - Target pose (position + heading)
+- `dLead` - Dynamic lead factor for carrot point (0-1)
+- `params` - Motion parameters  
+- `gLead` - Global lead factor (optional)
+- `gSettle` - Global settle range (optional)
+
+**Example:**
+```cpp
+// Move to (24, 24) facing 90°
+chassis.mtpose(
+    {.pos = {24, 24}, .heading = keejLib::Angle(90, keejLib::HEADING)},
+    0.2,  // 20% lead
+    {.vMax = 100, .settleRange = 5}
+);
+
+// Move to pose in reverse
+chassis.mtpose(
+    {.pos = {0, 0}, .heading = keejLib::Angle(0, keejLib::HEADING)},
+    0.15,
+    {.reverse = true}
+);
+
+// Use global lead (intermediate waypoint)
+chassis.mtpose(
+    {.pos = {48, 48}, .heading = keejLib::Angle(45, keejLib::HEADING)},
+    0.2,
+    {.vMax = 127},
+    0.5,  // Global lead multiplier
+    10    // Stop within 10" of intermediate
+);
+```
+
+**Features:**
+- Carrot point leads robot toward target pose
+- Switches to direct heading control when close
+- Optional intermediate waypoint (gLead)
+- Restricts angular velocity near target
+
+**Lead factor:** 0 = no lead, 1 = full distance lead. Typical: 0.15-0.25
+
+**Default exit:** `exit::Range(1, 20)` - within 1" for 20ms
+
+### swingTo()
+
+Arc turn - one side moves faster to turn toward point (1dpid.cpp:73).
+
+**Signature:**
+```cpp
+void swingTo(Pt target, double radius, MotionParams params);
+```
+
+**Parameters:**
+- `target` - Point to face
+- `radius` - Turn radius (positive = pivot left, negative = pivot right)
+- `params` - Motion parameters
+
+**Example:**
+```cpp
+// Swing right to face (24, 0)
+chassis.swingTo({24, 0}, -8, {.vMax = 80});
+
+// Swing left to face (0, 24)  
+chassis.swingTo({0, 24}, 8, {});
+
+// Tighter turn (smaller radius)
+chassis.swingTo({12, 12}, 4, {});
+```
+
+**Calculation:** Uses differential drive velocities based on radius and track width.
+
+### moveWithin()
+
+Move to within a distance of target point without stopping (2dpid.cpp:13).
+
+**Signature:**
+```cpp
+void moveWithin(Pt target, double dist, MotionParams params, double angle = -1);
+```
+
+**Parameters:**
+- `target` - Target point
+- `dist` - Stop when within this distance
+- `params` - Motion parameters
+- `angle` - Heading to maintain (default = current)
+
+**Example:**
+```cpp
+// Move to within 6" of (24, 24) at 45°
+chassis.moveWithin({24, 24}, 6, {.vMin = 30}, 45);
+
+// Approach point maintaining current heading
+chassis.moveWithin({48, 0}, 8, {});
+
+// Chain approach with another movement
+chassis.moveWithin({36, 36}, 12, {.vMin = 40});
+chassis.driveAngle(12, 0, {});  // Continue forward
+```
+
+**Use case:** Approaching game elements where you want to maintain velocity.
+
+## Motion Parameters
+
+### Common Parameters
+
+```cpp
+MotionParams params = {
+    .async = false,        // Run in background task
+    .timeout = 3000,       // Max time (ms)
+    .vMin = 0,             // Min velocity (0 = stop at end)
+    .vMax = 127,           // Max velocity (volts)
+    .angMax = 127,         // Max angular velocity
+    .settleRange = 3,      // Distance to consider "close"
+    .exit = nullptr,       // Custom exit (null = use default)
+    .slew = 0,             // Max acceleration (volts/10ms)
+    .reverse = false,      // Drive in reverse
+    .within = 0,           // Stop when within distance
+    .debug = false         // Print debug info
+};
+```
+
+### Exit Conditions
+
+Custom exit conditions end movements early:
+
+```cpp
+// Range exit - settle within error for time
+chassis.turn(90, {.exit = new exit::Range(2, 50)});
+// Exit when within 2° for 50ms
+
+// Timeout exit  
+chassis.mtpoint({24, 24}, {.exit = new exit::Timeout(2000)});
+// Exit after 2000ms
+
+// Perpendicular exit (for chaining)
+exit::Perp* perp = new exit::Perp({48, 48});
+// Exit when past perpendicular line through target
+```
+
+### Slew Rate
+
+Controls acceleration to prevent wheel slip:
+
+```cpp
+// No slew (instant acceleration)
+chassis.driveAngle(24, 0, {.slew = 0});
+
+// Gentle acceleration (2 volts per 10ms)
+chassis.driveAngle(24, 0, {.slew = 2});
+// Ramps from 0 to 100 in 500ms
+
+// Fast acceleration (5 volts per 10ms)  
+chassis.mtpoint({48, 48}, {.slew = 5});
+// Ramps from 0 to 100 in 200ms
+```
+
+### Movement Chaining
+
+Chain movements by setting `vMin` > 0:
+
+```cpp
+// Movement 1: accelerate and don't stop
+chassis.mtpoint({24, 24}, {
+    .vMin = 30,     // Maintain 30 volts minimum
+    .slew = 4
+});
+
+// Movement 2: continue without stopping
+chassis.driveAngle(12, 0, {
+    .vMin = 20      // Slow down but don't stop
+});
+
+// Movement 3: final movement stops
+chassis.turn(90, {
+    .vMin = 0       // Stop at end
+});
+```
+
+### Async Execution
+
+Run movements in parallel:
+
+```cpp
+// Start movement in background
+chassis.mtpoint({24, 24}, {.async = true});
+
+// Do other things while moving
+intake.spin(127);
+pros::delay(500);
+
+// Wait for movement to finish
+chassis.waitUntilSettled();
+
+// Or check status
+if (chassis.isSettled()) {
+    // Movement complete
+}
+```
+
+## Velocity Management
+
+The `VelocityManager` class (used internally) handles:
+
+- **Slew rate limiting** - Prevents sudden acceleration
+- **Max velocity clamping** - Respects vMax/angMax
+- **Min velocity enforcement** - Maintains vMin
+- **Slip speed calculation** - Limits speed in turns
+
+You don't interact with this directly, but it runs for mtpoint/mtpose.
+
+## Drift Compensation
+
+For mtpoint/mtpose, the `drift` parameter compensates for robot drift:
+
+```cpp
+// No drift compensation
+chassis.mtpoint({48, 48}, {.drift = 0});
+
+// Enable drift compensation
+chassis.mtpoint({48, 48}, {.drift = 0.1});
+```
+
+This calculates max slip speed to prevent wheel scrub in turns.
+
+## Complete Autonomous Example
+
+```cpp
+void autonomous() {
+    // Set starting position
+    chassis.setPose({
+        .pos = {-48, -48},
+        .heading = keejLib::Angle(45, keejLib::HEADING)
+    });
+    
+    // Movement 1: Drive to first goal
+    chassis.mtpose(
+        {.pos = {-24, -24}, .heading = keejLib::Angle(90, keejLib::HEADING)},
+        0.2,
+        {.timeout = 2000, .vMax = 100, .slew = 4}
+    );
+    
+    // Score
+    intake.spin(127);
+    pros::delay(500);
+    intake.stop();
+    
+    // Movement 2: Turn to face second goal
+    chassis.turnTo({24, 0}, {.vMax = 80});
+    
+    // Movement 3: Drive to second goal (chained)
+    chassis.driveAngle(36, chassis.getPose().heading.heading(), {
+        .vMin = 30,  // Don't stop
+        .slew = 3
+    });
+    
+    // Movement 4: Final approach
+    chassis.moveWithin({24, 0}, 6, {.vMin = 0});
+    
+    // Score again
+    intake.spin(127);
+    pros::delay(500);
+    
+    // Return home
+    chassis.mtpose(
+        {.pos = {-48, -48}, .heading = keejLib::Angle(0, keejLib::HEADING)},
+        0.15,
+        {.reverse = true}  // Drive backward
+    );
+}
+```
+
+## Debugging Movements
+
+Enable debug output:
+
+```cpp
+chassis.mtpoint({24, 24}, {.debug = true});
+// Prints:
+// - Linear velocity
+// - Angular velocity  
+// - Linear error
+// - Current pose
+// - Target pose
+// - Angular error
+```
+
+Or monitor position:
+
+```cpp
+while (!chassis.isSettled()) {
+    auto pose = chassis.getPose();
+    std::printf("(%.1f, %.1f, %.1f°)\n",
+        pose.pos.x,
+        pose.pos.y, 
+        pose.heading.heading());
+    pros::delay(50);
+}
+```
+
+## Tips and Best Practices
+
+1. **Tune PIDs separately** - Tune linear and angular controllers independently
+2. **Use slew on heavy robots** - Prevents wheel slip during acceleration  
+3. **Chain movements for speed** - Use vMin to avoid stopping between movements
+4. **Set reasonable timeouts** - Prevent autonomous from getting stuck
+5. **Test distances** - Verify field measurements match code
+6. **Use mtpose for precision** - When final heading matters
+7. **Use mtpoint for speed** - When only position matters
+8. **Enable debug sparingly** - Too much output slows down execution
+
+## Next Steps
+
+- [Setup](/chassis/setup) - Configure PID constants
+- [Odometry](/chassis/odometry) - Understand position tracking  
+- [Overview](/chassis/overview) - Review chassis architecture

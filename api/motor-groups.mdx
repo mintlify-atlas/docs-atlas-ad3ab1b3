@@ -1,0 +1,371 @@
+---
+title: Motor Groups
+description: Using PROS motor groups with keejLib
+---
+
+keejLib uses PROS `MotorGroup` objects for controlling multiple motors as a single unit. Motor groups are essential for drivetrain control and are used internally by the `DriveTrain` class.
+
+## Overview
+
+Motor groups allow you to control multiple motors simultaneously with a single command. This is particularly useful for drivetrains where multiple motors on each side should move together.
+
+## Creating Motor Groups
+
+### Basic Syntax
+
+```cpp
+pros::MotorGroup groupName({port1, port2, port3, ...});
+```
+
+Motor ports can be:
+- **Positive** (1-21): Motor spins in default direction
+- **Negative** (-1 to -21): Motor spins in reversed direction
+
+### Example Motor Group Setup
+
+```cpp
+// Left side motors (ports 1, 2, 3) - reversed with negative ports
+pros::MotorGroup leftMotors({-1, -2, -3});
+
+// Right side motors (ports 4, 5, 6) - normal direction
+pros::MotorGroup rightMotors({4, 5, 6});
+```
+
+## Motor Port Configuration
+
+### Understanding Motor Direction
+
+When building a differential drive robot:
+- Motors on opposite sides typically need to spin in opposite directions to move forward
+- Use negative port numbers to reverse a motor's direction
+- This eliminates the need for reversing logic in your code
+
+**Example Configuration:**
+```
+Top View of Robot:
+    Front
+      ↑
+[-1]  |  [4]
+[-2]  |  [5]   // [-#] = reversed, [#] = normal
+[-3]  |  [6]
+```
+
+### Determining Correct Port Signs
+
+1. **Physical Test Method:**
+   ```cpp
+   leftMotors.move(127);   // Should spin to drive forward
+   rightMotors.move(127);  // Should spin to drive forward
+   ```
+   If a side moves backward, negate those port numbers.
+
+2. **Visual Inspection:**
+   - Stand behind the robot
+   - Left motors should spin clockwise for forward motion
+   - Right motors should spin counter-clockwise for forward motion
+   - If a motor is mounted opposite, negate its port
+
+## Using Motor Groups with DriveTrain
+
+### Complete Setup Example
+
+```cpp
+#include "keejLib/chassis.h"
+
+// Define motor groups
+pros::MotorGroup leftMotors({-1, -2, -3});
+pros::MotorGroup rightMotors({4, 5, 6});
+
+// Define drivetrain constants
+keejLib::DriveTrainConstants dtConsts = {
+    .gearRatio = 0.75,    // 48T driving 64T (48/64)
+    .cartridge = 600,     // 600 RPM motor cartridge
+    .wheelDia = 3.25      // 3.25" diameter wheels
+};
+
+// Create drivetrain
+keejLib::DriveTrain dt(&leftMotors, &rightMotors, dtConsts);
+
+// Use drivetrain
+dt.spinAll(100);  // Both motor groups move forward
+```
+
+## Motor Group Methods
+
+While keejLib primarily uses `MotorGroup` objects through the `DriveTrain` class, you can also use PROS motor group methods directly:
+
+### Movement Commands
+
+```cpp
+// Voltage control (-127 to 127)
+leftMotors.move(127);        // Full speed forward
+leftMotors.move(-127);       // Full speed backward
+leftMotors.move(0);          // Stop
+
+// Velocity control (RPM)
+leftMotors.move_velocity(200);  // Move at 200 RPM
+
+// Voltage control (millivolts)
+leftMotors.move_voltage(12000); // Full speed (12V)
+```
+
+### Brake Modes
+
+```cpp
+// Set brake mode for all motors in group
+leftMotors.set_brake_modes(pros::E_MOTOR_BRAKE_COAST);
+leftMotors.set_brake_modes(pros::E_MOTOR_BRAKE_BRAKE);
+leftMotors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
+```
+
+### Sensor Readings
+
+```cpp
+// Get average position across all motors
+double avgPos = leftMotors.get_position();
+
+// Get average velocity
+double avgVel = leftMotors.get_actual_velocity();
+
+// Get average temperature
+double avgTemp = leftMotors.get_temperature();
+```
+
+### Encoder Operations
+
+```cpp
+// Reset encoder positions to zero
+leftMotors.tare_position();
+
+// Set absolute position
+leftMotors.set_zero_position(0);
+```
+
+## Common Motor Configurations
+
+### 6-Motor Drive (3 per side)
+
+```cpp
+pros::MotorGroup leftMotors({-1, -2, -3});
+pros::MotorGroup rightMotors({4, 5, 6});
+```
+
+### 4-Motor Drive (2 per side)
+
+```cpp
+pros::MotorGroup leftMotors({-1, -2});
+pros::MotorGroup rightMotors({3, 4});
+```
+
+### 8-Motor Drive (4 per side)
+
+```cpp
+pros::MotorGroup leftMotors({-1, -2, -3, -4});
+pros::MotorGroup rightMotors({5, 6, 7, 8});
+```
+
+### Mixed Motor Types
+
+If you have different motor cartridges, create separate groups:
+
+```cpp
+// Two 600 RPM motors on left
+pros::MotorGroup leftFast({-1, -2});
+
+// Two 200 RPM motors on left
+pros::MotorGroup leftSlow({-3, -4});
+
+// For high-torque tasks
+leftSlow.move(127);
+
+// For high-speed tasks
+leftFast.move(127);
+```
+
+## Motor Group Best Practices
+
+### 1. Consistent Gearing
+
+All motors in a group should have the same:
+- Gear ratio
+- Wheel diameter
+- Motor cartridge (200, 600, or 100 RPM)
+
+### 2. Brake Mode Configuration
+
+```cpp
+// Set brake modes during initialization
+void initialize() {
+    leftMotors.set_brake_modes(pros::E_MOTOR_BRAKE_BRAKE);
+    rightMotors.set_brake_modes(pros::E_MOTOR_BRAKE_BRAKE);
+}
+```
+
+Brake modes:
+- **COAST**: Motors spin freely when stopped (good for pushing matches)
+- **BRAKE**: Motors resist motion when stopped (good for precise control)
+- **HOLD**: Motors actively hold position (best for autonomous)
+
+### 3. Regular Encoder Taring
+
+```cpp
+void autonomous() {
+    // Reset encoders at start of autonomous
+    leftMotors.tare_position();
+    rightMotors.tare_position();
+    
+    // Your autonomous code
+}
+```
+
+### 4. Temperature Monitoring
+
+```cpp
+void monitor_motors() {
+    double leftTemp = leftMotors.get_temperature();
+    double rightTemp = rightMotors.get_temperature();
+    
+    if (leftTemp > 55 || rightTemp > 55) {
+        pros::lcd::print(0, "WARNING: Motor overheating!");
+    }
+}
+```
+
+## Troubleshooting
+
+### Robot Turns When Driving Straight
+
+**Problem:** Robot veers to one side when given equal power to both sides.
+
+**Solutions:**
+1. Check motor port signs - one side may need negation
+2. Verify all motors are the same cartridge
+3. Check for mechanical binding
+4. Verify wheels are the same size
+
+```cpp
+// Test each side independently
+leftMotors.move(100);
+pros::delay(2000);
+leftMotors.move(0);
+
+rightMotors.move(100);
+pros::delay(2000);
+rightMotors.move(0);
+```
+
+### One Side Weaker Than Other
+
+**Problem:** Robot has uneven power between sides.
+
+**Solutions:**
+1. Check for loose or damaged gears
+2. Verify motor cartridges match
+3. Check motor temperatures (overheating reduces power)
+4. Ensure gear ratios are identical
+
+```cpp
+// Compare motor velocities
+double leftVel = leftMotors.get_actual_velocity();
+double rightVel = rightMotors.get_actual_velocity();
+pros::lcd::print(0, "L: %.1f, R: %.1f", leftVel, rightVel);
+```
+
+### Motors Not Moving
+
+**Problem:** Motor group doesn't respond to commands.
+
+**Solutions:**
+1. Verify port numbers are correct (1-21)
+2. Check smart cable connections
+3. Ensure motors are not tripped (red light)
+4. Verify brain is not in disabled mode
+
+```cpp
+// Test individual motors
+pros::Motor testMotor(1);  // Test port 1
+if (testMotor.get_actual_velocity() == PROS_ERR) {
+    pros::lcd::print(0, "Motor 1 not connected!");
+}
+```
+
+## Advanced: Custom Motor Control
+
+For subsystems beyond the drivetrain, you can create additional motor groups:
+
+```cpp
+// Intake motor group
+pros::MotorGroup intake({7, 8});
+
+// Flywheel motor group
+pros::MotorGroup flywheel({-9, 10});  // One reversed for proper spin
+
+// Control in opcontrol
+void opcontrol() {
+    while (true) {
+        if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
+            intake.move(127);
+        } else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) {
+            intake.move(-127);
+        } else {
+            intake.move(0);
+        }
+        
+        pros::delay(10);
+    }
+}
+```
+
+## Integration Example
+
+Complete robot setup using motor groups:
+
+```cpp
+#include "main.h"
+#include "keejLib/chassis.h"
+
+// Define motor groups
+pros::MotorGroup leftMotors({-1, -2, -3});
+pros::MotorGroup rightMotors({4, 5, 6});
+pros::MotorGroup intake({7});
+
+// Define drivetrain
+keejLib::DriveTrainConstants dtConsts = {
+    .gearRatio = 0.75,
+    .cartridge = 600,
+    .wheelDia = 3.25
+};
+keejLib::DriveTrain dt(&leftMotors, &rightMotors, dtConsts);
+
+void initialize() {
+    // Configure brake modes
+    leftMotors.set_brake_modes(pros::E_MOTOR_BRAKE_BRAKE);
+    rightMotors.set_brake_modes(pros::E_MOTOR_BRAKE_BRAKE);
+    intake.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
+    
+    // Reset encoders
+    leftMotors.tare_position();
+    rightMotors.tare_position();
+}
+
+void opcontrol() {
+    pros::Controller master(pros::E_CONTROLLER_MASTER);
+    keejLib::Controller controller(master);
+    
+    while (true) {
+        // Drivetrain control
+        keejLib::ChassVelocities vel = 
+            controller.drive(1, keejLib::Controller::arcade);
+        dt.spinVolts(vel);
+        
+        // Intake control
+        if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
+            intake.move(127);
+        } else {
+            intake.brake();
+        }
+        
+        pros::delay(10);
+    }
+}
+```

@@ -1,0 +1,147 @@
+---
+title: Types
+description: Data structures and types used in keejLib
+---
+
+## Pt
+
+A 2D point structure representing a position in the field.
+
+<ParamField path="x" type="double" default="0">
+  X-coordinate of the point
+</ParamField>
+
+<ParamField path="y" type="double" default="0">
+  Y-coordinate of the point
+</ParamField>
+
+### Methods
+
+- `double dist(Pt a)` - Calculate distance to another point
+
+---
+
+## Angle
+
+A class for handling angles with automatic conversions between different angle types.
+
+### Constructor
+
+```cpp
+Angle(double angle, AngleType type)
+```
+
+### Methods
+
+- `double rad()` - Get angle in radians
+- `double deg()` - Get angle in degrees
+- `double heading()` - Get angle as heading (0-360)
+- `double error(Angle other)` - Calculate angular error to another angle
+- `Angle reverseDir()` - Reverse the direction of the angle
+
+### Operators
+
+- `Angle operator+(Angle& other)` - Add two angles
+- `void operator+=(Angle& other)` - Add and assign
+- `Angle operator-(Angle& other)` - Subtract two angles
+- `Angle operator/(double b)` - Divide angle by scalar
+- `bool operator==(double b)` - Compare angle with scalar
+
+---
+
+## Pose
+
+Represents a robot's position and orientation in the field.
+
+<ParamField path="pos" type="Pt">
+  Position of the robot as a 2D point
+</ParamField>
+
+<ParamField path="heading" type="Angle">
+  Orientation of the robot
+</ParamField>
+
+---
+
+## ChassVelocities
+
+Represents the velocity of the left and right sides of the drivetrain.
+
+<ParamField path="left" type="double">
+  Velocity of the left side motors
+</ParamField>
+
+<ParamField path="right" type="double">
+  Velocity of the right side motors
+</ParamField>
+
+---
+
+## Autons
+
+Structure for storing autonomous routines.
+
+<ParamField path="autonsList" type="std::vector<fptr>">
+  Vector of function pointers to autonomous routines
+</ParamField>
+
+<ParamField path="names" type="std::vector<std::string>">
+  Vector of names corresponding to each autonomous routine
+</ParamField>
+
+---
+
+## Enums
+
+### AngleType
+
+Defines the type of angle measurement.
+
+- `RAD` - Radians
+- `DEG` - Degrees
+- `HEADING` - Heading (0-360 degrees)
+
+### Color
+
+Defines team colors for competition.
+
+- `red` - Red alliance
+- `blue` - Blue alliance
+- `none` - No alliance
+
+### CompState
+
+Defines the current competition state.
+
+- `autonomous` - Autonomous period
+- `teleop` - Teleoperated period
+- `initialize` - Initialization period
+
+### buttons
+
+Controller button mappings.
+
+- `L1` - Left bumper 1
+- `NL1` - Left bumper 1 (new press)
+- `L2` - Left bumper 2
+- `NL2` - Left bumper 2 (new press)
+- `R1` - Right bumper 1
+- `NR1` - Right bumper 1 (new press)
+- `R2` - Right bumper 2
+- `NR2` - Right bumper 2 (new press)
+- `UP` - D-pad up
+- `NUP` - D-pad up (new press)
+- `DOWN` - D-pad down
+- `NDOWN` - D-pad down (new press)
+- `LEFT` - D-pad left
+- `NLEFT` - D-pad left (new press)
+- `RIGHT` - D-pad right
+- `NRIGHT` - D-pad right (new press)
+- `X` - X button
+- `NX` - X button (new press)
+- `B` - B button
+- `NB` - B button (new press)
+- `Y` - Y button
+- `NY` - Y button (new press)
+- `A` - A button
+- `NA` - A button (new press)

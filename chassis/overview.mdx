@@ -1,0 +1,138 @@
+---
+title: Chassis Overview
+description: Introduction to keejLib's Chassis class for PROS robotics
+---
+
+The Chassis class is the core of keejLib's movement system, providing odometry tracking, autonomous movement algorithms, and precise control for VEX robots running PROS.
+
+## Key Features
+
+- **Odometry Tracking**: Real-time position tracking using tracking wheels and IMU
+- **Movement Algorithms**: PID-based movements including turn, drive, move-to-point, and move-to-pose
+- **Motion Profiling**: Velocity management with slew rate control and dynamic limits
+- **Flexible Control**: Support for both synchronous and asynchronous movements
+- **Field-Relative Navigation**: Automatic coordinate translation for blue/red alliance
+
+## Class Structure
+
+The Chassis class (chassis.h:77) is non-copyable and non-movable, designed as a singleton for your robot:
+
+```cpp
+namespace keejLib {
+    class Chassis {
+        private:
+            DriveTrain *dt;
+            pros::Imu *imu;
+            pros::Rotation *vertEnc;
+            pros::Rotation *horizEnc;
+            pros::Distance *vertDist;
+            pros::Distance *horizDist;
+            
+            ChassConstants chassConsts;
+            PIDConstants linConsts;
+            PIDConstants angConsts;
+            PIDConstants turnConsts;
+            PIDConstants mtpLin;
+            PIDConstants mtpAng;
+            PIDConstants mtposeLin;
+            PIDConstants mtposeAng;
+            
+            Pose pose;
+            // ... internal state
+    };
+}
+```
+
+## Core Components
+
+### DriveTrain
+
+Manages the motor groups for left and right sides of the chassis:
+
+```cpp
+class DriveTrain {
+    private:
+        pros::MotorGroup *leftMotors;
+        pros::MotorGroup *rightMotors;
+        DriveTrainConstants dtConsts;
+    public:
+        void spinVolts(ChassVelocities velocities);
+        void spinAll(int volts);
+        double getAvgVelocity(bool volts = false);
+        double getAvgPosition();
+};
+```
+
+### Configuration Structs
+
+Three key structs define your robot's physical constants:
+
+1. **ChassConstants** - Tracking wheel configuration
+2. **DriveTrainConstants** - Drive motor configuration  
+3. **MotionParams** - Movement behavior parameters
+
+See the [Setup](/chassis/setup) page for detailed configuration.
+
+## Movement Methods
+
+The Chassis class provides several movement primitives:
+
+### Basic Movements
+- `turn()` - Turn to absolute heading
+- `turnTo()` - Turn to face a point
+- `driveAngle()` - Drive straight at an angle
+
+### Advanced Movements
+- `mtpoint()` - Move to point (Boomerang controller)
+- `mtpose()` - Move to pose (position + heading)
+- `swingTo()` - Arc turn around a point
+- `moveWithin()` - Move to within distance of point
+- `linTo()` - Linear movement to point
+
+See the [Movements](/chassis/movements) page for usage examples.
+
+## Odometry System
+
+The chassis uses a **two-wheel odometry** system with:
+
+- Vertical tracking wheel (perpendicular to drive)
+- Horizontal tracking wheel (parallel to drive)
+- IMU for heading measurement
+- 10ms update rate via RTOS task
+
+See the [Odometry](/chassis/odometry) page for tracking wheel setup and position tracking.
+
+## PID Controllers
+
+Multiple PID controllers handle different aspects of movement:
+
+- **linConsts** - Linear movement for driveAngle
+- **angConsts** - Angular correction for straight driving
+- **turnConsts** - Pure rotation movements
+- **mtpLin/mtpAng** - Move-to-point linear and angular
+- **mtposeLin/mtposeAng** - Move-to-pose linear and angular
+
+Each controller can be tuned independently using `setLin()`, `setAng()`, `setTurn()`, `setMTP()`, and `setMTPose()`.
+
+## Asynchronous Movement
+
+All movement commands support async execution via the `MotionParams.async` flag:
+
+```cpp
+// Non-blocking movement
+chassis.turn(90, {.async = true});
+
+// Wait for completion
+chassis.waitUntilSettled();
+
+// Or check status
+if (chassis.isSettled()) {
+    // Movement complete
+}
+```
+
+## Next Steps
+
+- [Setup](/chassis/setup) - Initialize and configure your chassis
+- [Odometry](/chassis/odometry) - Set up position tracking
+- [Movements](/chassis/movements) - Learn movement commands

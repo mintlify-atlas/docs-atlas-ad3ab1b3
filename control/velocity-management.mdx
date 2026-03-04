@@ -1,0 +1,440 @@
+---
+title: 'Velocity Management'
+description: 'Control and constrain robot velocities with VelocityController and VelocityManager classes'
+---
+
+## Overview
+
+keejLib provides two classes for velocity control:
+
+- **VelocityController**: PID-based velocity tracking for single axis
+- **VelocityManager**: Manages linear and angular velocity constraints, slew rate limiting, and converts to differential drive outputs
+
+## VelocityController
+
+The `VelocityController` class uses PID control with exponential moving average (EMA) filtering to track a target velocity.
+
+### Constructor
+
+```cpp
+VelocityController(PIDConstants cons, double ka);
+```
+
+**Parameters:**
+- `cons` - PIDConstants for velocity control loop
+- `ka` - EMA smoothing factor (0-1, higher = less smoothing)
+
+### Methods
+
+#### setVelocity()
+
+```cpp
+void setVelocity(double v);
+```
+
+Sets the target velocity to track.
+
+**Parameters:**
+- `v` - Target velocity value
+
+#### getVoltage()
+
+```cpp
+double getVoltage(double curr);
+```
+
+Calculates the voltage output needed to track target velocity.
+
+**Parameters:**
+- `curr` - Current velocity measurement
+
+**Returns:**
+- Voltage/power output to apply to motors
+
+### Usage Example
+
+```cpp
+// Setup velocity PID constants
+keejLib::PIDConstants velPID = {
+    .kp = 15.0,
+    .ki = 0.5,
+    .kd = 1.0,
+    .kf = 0.0,
+    .maxIntegral = 30.0,
+    .tolerance = 1.0,
+    .integralThreshold = 5.0
+};
+
+// Create velocity controller with EMA smoothing factor 0.3
+keejLib::VelocityController velController(velPID, 0.3);
+
+// Set target velocity
+velController.setVelocity(50.0);  // Target velocity
+
+while (true) {
+    // Get current velocity
+    double currentVel = getWheelVelocity();
+    
+    // Calculate required voltage
+    double voltage = velController.getVoltage(currentVel);
+    
+    // Apply to motors
+    motors.spin(voltage);
+    
+    pros::delay(10);
+}
+```
+
+### Integration with Motion Profiling
+
+```cpp
+// Generate motion profile
+auto profile = keejLib::generateProfile(24.0, params, limits);
+
+// Track profile with velocity controller
+for (size_t i = 0; i < profile.size(); i++) {
+    // Set target from profile
+    velController.setVelocity(profile[i]);
+    
+    // Track velocity
+    double currentVel = getWheelVelocity();
+    double voltage = velController.getVoltage(currentVel);
+    
+    motors.spin(voltage);
+    pros::delay(10);
+}
+```
+
+### Implementation Details
+
+```cpp velocity.cpp:8-15
+- Uses PID controller to calculate error correction
+- EMA filter smooths current velocity measurement
+- Error = target - current velocity
+- Output is voltage/power value for motors
+```
+
+---
+
+## VelocityManager
+
+The `VelocityManager` class manages linear and angular velocity constraints, applies slew rate limiting, and converts to differential drive motor outputs.
+
+### Constructor
+
+```cpp
+VelocityManager(
+    double vl = 0,       // Initial linear velocity
+    double va = 0,       // Initial angular velocity
+    double s = 0,        // Slew rate (0 = disabled)
+    double linMin = 0,   // Minimum linear velocity
+    double linMax = 127, // Maximum linear velocity
+    double angMin = 0,   // Minimum angular velocity
+    double angMax = 127  // Maximum angular velocity
+);
+```
+
+**Parameters:**
+- `vl` - Initial linear velocity
+- `va` - Initial angular velocity  
+- `s` - Slew rate limit (change per update). Set to 0 to disable
+- `linMin` - Minimum linear velocity magnitude
+- `linMax` - Maximum linear velocity magnitude
+- `angMin` - Minimum angular velocity magnitude
+- `angMax` - Maximum angular velocity magnitude
+
+### Methods
+
+#### update()
+
+```cpp
+ChassVelocities update(std::pair<double, double> vals);
+```
+
+Updates velocities with constraints and returns differential drive outputs.
+
+**Parameters:**
+- `vals` - Pair of linear velocity and angular velocity
+
+**Returns:**
+- `ChassVelocities` - Struct with left and right motor velocities
+
+**Behavior:**
+```cpp velocity.cpp:17-30
+1. Applies slew rate limiting to linear velocity
+2. Clamps linear velocity between [linMin, linMax]
+3. Clamps angular velocity between [angMin, angMax]
+4. Converts to differential drive: {left, right}
+5. Desaturates if total exceeds 127
+```
+
+#### Setter Methods
+
+```cpp
+void setLinMin(double newLinMin);
+void setLinMax(double newLinMax);
+void setAngMin(double newAngMin);
+void setAngMax(double newAngMax);
+void setSlew(double newSlew);
+```
+
+Dynamically update velocity constraints.
+
+### Usage Examples
+
+#### Basic Velocity Management
+
+```cpp
+// Create velocity manager with constraints
+keejLib::VelocityManager velMgr(
+    0,      // Initial linear velocity
+    0,      // Initial angular velocity
+    5.0,    // Slew rate: max change of 5 per update
+    10,     // Minimum linear velocity
+    127,    // Maximum linear velocity
+    0,      // Minimum angular velocity
+    100     // Maximum angular velocity
+);
+
+while (true) {
+    // Get desired velocities from controller or autonomous
+    double linear = controller.get_analog(ANALOG_LEFT_Y);
+    double angular = controller.get_analog(ANALOG_RIGHT_X);
+    
+    // Apply constraints and convert to differential
+    ChassVelocities output = velMgr.update({linear, angular});
+    
+    // Apply to motors
+    leftMotors.spin(output.left);
+    rightMotors.spin(output.right);
+    
+    pros::delay(10);
+}
+```
+
+#### Dynamic Velocity Limits
+
+Change velocity limits during operation (e.g., precision mode):
+
+```cpp
+keejLib::VelocityManager velMgr(0, 0, 5.0, 0, 127, 0, 127);
+
+bool precisionMode = false;
+
+while (true) {
+    // Toggle precision mode
+    if (controller.get_digital_new_press(DIGITAL_B)) {
+        precisionMode = !precisionMode;
+        
+        if (precisionMode) {
+            // Reduce maximum velocities for precise control
+            velMgr.setLinMax(50);
+            velMgr.setAngMax(40);
+        } else {
+            // Restore full speed
+            velMgr.setLinMax(127);
+            velMgr.setAngMax(127);
+        }
+    }
+    
+    double linear = controller.get_analog(ANALOG_LEFT_Y);
+    double angular = controller.get_analog(ANALOG_RIGHT_X);
+    
+    auto output = velMgr.update({linear, angular});
+    
+    leftMotors.spin(output.left);
+    rightMotors.spin(output.right);
+    
+    pros::delay(10);
+}
+```
+
+#### Slew Rate Limiting
+
+Prevent sudden velocity changes:
+
+```cpp
+// High slew rate for responsive control
+keejLib::VelocityManager responsive(0, 0, 20.0);
+
+// Low slew rate for smooth, gradual acceleration
+keejLib::VelocityManager smooth(0, 0, 2.0);
+
+// Disable slew rate (instant velocity changes)
+keejLib::VelocityManager instant(0, 0, 0);
+```
+
+#### Minimum Velocity (Dead Zone)
+
+Set minimum velocity to overcome static friction:
+
+```cpp
+// Robot won't move below 15 units of power
+keejLib::VelocityManager velMgr(
+    0, 0, 5.0,
+    15,    // Linear minimum - overcome friction
+    127,
+    10,    // Angular minimum
+    127
+);
+
+// Small inputs get clamped to minimum
+auto output1 = velMgr.update({5, 0});    // Linear clamped to 15
+auto output2 = velMgr.update({30, 0});   // Linear stays at 30
+auto output3 = velMgr.update({0, 5});    // Angular clamped to 10
+```
+
+### Differential Drive Conversion
+
+The `update()` method converts linear and angular velocities to left/right motor speeds:
+
+```
+linear = forward/backward velocity
+angular = turning velocity
+
+left = linear + angular
+right = linear - angular
+```
+
+**Example conversions:**
+- Forward: `{50, 0}` → `{left: 50, right: 50}`
+- Turn right: `{0, 30}` → `{left: 30, right: -30}`
+- Forward + right: `{50, 30}` → `{left: 80, right: 20}`
+
+### Desaturation
+
+When combined velocities exceed maximum (127), the manager desaturates:
+
+```cpp velocity.cpp:26-28
+// If |linear| + |angular| > 127, reduce linear to fit
+if (std::abs(vl) + std::abs(va) > 127) {
+    vl = (127 - std::abs(va)) * sign(vl);
+}
+```
+
+**Example:**
+- Input: `{100, 50}` → Would be `{left: 150, right: 50}`
+- Desaturated: `{77, 50}` → Becomes `{left: 127, right: 27}`
+- Preserves turning rate, reduces forward speed
+
+### Usage with Chassis Control
+
+```cpp
+// Create velocity manager for chassis
+keejLib::VelocityManager chassisVel(0, 0, 8.0, 10, 127, 0, 100);
+
+void arcadeDrive() {
+    while (true) {
+        // Get controller input
+        double forward = controller.get_analog(ANALOG_LEFT_Y);
+        double turn = controller.get_analog(ANALOG_RIGHT_X);
+        
+        // Apply velocity management
+        auto motors = chassisVel.update({forward, turn});
+        
+        // Drive
+        leftSide.spin(motors.left);
+        rightSide.spin(motors.right);
+        
+        pros::delay(10);
+    }
+}
+
+void tankDrive() {
+    while (true) {
+        double left = controller.get_analog(ANALOG_LEFT_Y);
+        double right = controller.get_analog(ANALOG_RIGHT_Y);
+        
+        // Convert tank to arcade style
+        double linear = (left + right) / 2.0;
+        double angular = (left - right) / 2.0;
+        
+        auto motors = chassisVel.update({linear, angular});
+        
+        leftSide.spin(motors.left);
+        rightSide.spin(motors.right);
+        
+        pros::delay(10);
+    }
+}
+```
+
+## Combining VelocityController and VelocityManager
+
+Use both classes together for complete velocity control:
+
+```cpp
+// Setup PID velocity controllers for each side
+keejLib::VelocityController leftVelCtrl(velPID, 0.3);
+keejLib::VelocityController rightVelCtrl(velPID, 0.3);
+
+// Setup velocity manager for constraints
+keejLib::VelocityManager velMgr(0, 0, 5.0, 10, 127, 0, 100);
+
+while (true) {
+    // Get desired velocities
+    double linear = getDesiredLinear();
+    double angular = getDesiredAngular();
+    
+    // Apply constraints and convert to differential
+    auto targetVels = velMgr.update({linear, angular});
+    
+    // Track target velocities with PID
+    leftVelCtrl.setVelocity(targetVels.left);
+    rightVelCtrl.setVelocity(targetVels.right);
+    
+    // Get current velocities
+    double currLeft = getLeftVelocity();
+    double currRight = getRightVelocity();
+    
+    // Calculate voltage outputs
+    double leftVolt = leftVelCtrl.getVoltage(currLeft);
+    double rightVolt = rightVelCtrl.getVoltage(currRight);
+    
+    // Apply to motors
+    leftMotors.spin(leftVolt);
+    rightMotors.spin(rightVolt);
+    
+    pros::delay(10);
+}
+```
+
+## Best Practices
+
+### VelocityController
+
+1. **Tune PID carefully**: Velocity control requires different gains than position control
+2. **Use EMA filtering**: Smooths noisy velocity measurements (ka = 0.2-0.4)
+3. **Match update rate**: Ensure control loop runs at consistent intervals
+4. **Consider feedforward**: For predictable velocity tracking, add kf term
+
+### VelocityManager
+
+1. **Set appropriate mins**: Minimum velocities should overcome static friction
+2. **Use slew rate**: Prevents sudden accelerations and wheel slippage
+3. **Dynamic limits**: Adjust limits for different game scenarios (precision vs speed)
+4. **Monitor desaturation**: If frequently desaturating, reduce maximum velocities
+5. **Update regularly**: Call update() every control loop iteration (typically 10ms)
+
+## Parameter Tuning Guide
+
+### Slew Rate
+- **Too high**: Jerky movements, wheel slippage, motor stress
+- **Too low**: Sluggish response, can't reach desired velocity quickly
+- **Recommended**: Start at 5-10, adjust based on robot mass and power
+
+### Minimum Velocities
+- **Purpose**: Overcome static friction, ensure robot actually moves
+- **Testing**: Find lowest power where robot consistently moves
+- **Typical values**: 10-20 for linear, 5-15 for angular
+
+### Maximum Velocities  
+- **Linear max**: Set below 127 to reserve power for turning
+- **Angular max**: Limit turning speed for stability
+- **Competition strategy**: Reduce for precision, increase for speed
+
+## See Also
+
+- [PID Controller](/control/pid) - Core PID implementation used by VelocityController
+- [Motion Profiling](/control/motion-profiling) - Generate velocity profiles to track
+- [Exit Conditions](/control/exit-conditions) - Determine when velocity-controlled movements finish

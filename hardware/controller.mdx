@@ -1,0 +1,413 @@
+---
+title: "Controller"
+description: "Enhanced controller wrapper with drive curves, button tracking, and selection menus"
+---
+
+## Overview
+
+The keejLib controller wrapper extends the PROS controller with convenient features for button state tracking, drive control with curves, and a built-in selection menu system.
+
+## Class Definition
+
+```cpp
+namespace keejLib {
+    class Controller {
+        private:
+            pros::Controller* cont;
+            double leftCurve;
+            double rightCurve;
+            std::vector<bool> curr;
+            std::vector<bool> prev;
+
+        public:
+            Controller(pros::Controller& cont);
+
+            enum driveMode {
+                arcade,
+                tank,
+                reverseArcade,
+                curvature
+            };
+
+            int select(std::vector<std::string> names);
+            std::vector<bool> getAll(std::vector<pros::controller_digital_e_t> buttons);
+            std::vector<bool> getReleased();
+            double curve(double x, double scale);
+            ChassVelocities drive(int direction, Controller::driveMode mode);
+            void setCurves(double left, double right);
+    };
+}
+```
+
+## Initialization
+
+Wrap an existing PROS controller:
+
+```cpp
+pros::Controller controller_pros(pros::E_CONTROLLER_MASTER);
+keejLib::Controller controller_lib(controller_pros);
+```
+
+## Button Tracking
+
+### getAll()
+
+Returns the state of all specified buttons, including both current press and "new press" detection.
+
+<ParamField path="buttons" type="std::vector<pros::controller_digital_e_t>" required>
+  Vector of button enums to check. Use the `ALLBUTTONS` macro to get all buttons.
+</ParamField>
+
+**Returns:** `std::vector<bool>` - Button states indexed by the button enum
+
+```cpp
+std::vector<bool> cont = controller.getAll(ALLBUTTONS);
+
+if (cont[keejLib::A])   // Button A is pressed
+if (cont[keejLib::NA])  // Button A was just pressed (new press)
+if (cont[keejLib::L1])  // L1 is pressed
+if (cont[keejLib::NL1]) // L1 was just pressed
+```
+
+### Button Enumeration
+
+The button indices correspond to these values:
+
+```cpp
+enum buttons {
+    L1 = 0,      // L1 held
+    NL1 = 1,     // L1 new press
+    L2 = 2,      // L2 held
+    NL2 = 3,     // L2 new press
+    R1 = 4,      // R1 held
+    NR1 = 5,     // R1 new press
+    R2 = 6,      // R2 held
+    NR2 = 7,     // R2 new press
+    UP = 8,      // Up held
+    NUP = 9,     // Up new press
+    DOWN = 10,   // Down held
+    NDOWN = 11,  // Down new press
+    LEFT = 12,   // Left held
+    NLEFT = 13,  // Left new press
+    RIGHT = 14,  // Right held
+    NRIGHT = 15, // Right new press
+    X = 16,      // X held
+    NX = 17,     // X new press
+    B = 18,      // B held
+    NB = 19,     // B new press
+    Y = 20,      // Y held
+    NY = 21,     // Y new press
+    A = 22,      // A held
+    NA = 23      // A new press
+};
+```
+
+<Note>
+  Buttons prefixed with `N` detect "new presses" - they only return true on the first frame the button is pressed, not while held.
+</Note>
+
+### getReleased()
+
+Returns a vector of buttons that were just released.
+
+**Returns:** `std::vector<bool>` - Button release states
+
+```cpp
+std::vector<bool> released = controller.getReleased();
+```
+
+## Drive Control
+
+### drive()
+
+Converts joystick inputs into motor voltages for differential drive control.
+
+<ParamField path="direction" type="int" required>
+  Direction multiplier: `1` for forward, `-1` for reversed controls
+</ParamField>
+
+<ParamField path="mode" type="Controller::driveMode" required>
+  Drive control mode:
+  - `Controller::arcade` - Left stick Y for forward/back, right stick X for turning
+  - `Controller::tank` - Left stick controls left side, right stick controls right side
+  - `Controller::reverseArcade` - Arcade with reversed controls
+  - `Controller::curvature` - Curved joystick response
+</ParamField>
+
+**Returns:** `ChassVelocities` - Struct with `left` and `right` motor voltages
+
+```cpp
+// Arcade drive
+ChassVelocities vel = controller.drive(1, keejLib::Controller::arcade);
+chassMtrs.spinDiffy(vel);
+
+// One-line drive control
+chassMtrs.spinDiffy(controller.drive(-1, keejLib::Controller::arcade));
+```
+
+### Drive Modes
+
+<Tabs>
+  <Tab title="Arcade">
+    Left joystick Y-axis controls forward/backward movement, right joystick X-axis controls turning.
+    
+    ```cpp
+    chassMtrs.spinDiffy(controller.drive(1, keejLib::Controller::arcade));
+    ```
+    
+    - Best for: Intuitive control, easy to learn
+    - Popular in: Most VEX robots
+  </Tab>
+  
+  <Tab title="Tank">
+    Left joystick controls left side motors, right joystick controls right side motors independently.
+    
+    ```cpp
+    chassMtrs.spinDiffy(controller.drive(1, keejLib::Controller::tank));
+    ```
+    
+    - Best for: Precise control, experienced drivers
+    - Popular in: Competition robots requiring fine control
+  </Tab>
+  
+  <Tab title="Reverse Arcade">
+    Same as arcade but with reversed forward/backward direction.
+    
+    ```cpp
+    chassMtrs.spinDiffy(controller.drive(1, keejLib::Controller::reverseArcade));
+    ```
+    
+    - Best for: Robots that drive "backward" frequently
+  </Tab>
+  
+  <Tab title="Curvature">
+    Arcade drive with curved joystick response for smoother control.
+    
+    ```cpp
+    chassMtrs.spinDiffy(controller.drive(1, keejLib::Controller::curvature));
+    ```
+    
+    - Best for: Smooth, precise movements
+    - Popular in: Robots needing fine speed control
+  </Tab>
+</Tabs>
+
+### setCurves()
+
+Sets the curve scaling factor for left and right joysticks. Higher values create more aggressive curves, giving finer control at low speeds.
+
+<ParamField path="left" type="double" required>
+  Curve scaling for left joystick (0 = linear, higher = more curved)
+</ParamField>
+
+<ParamField path="right" type="double" required>
+  Curve scaling for right joystick (0 = linear, higher = more curved)
+</ParamField>
+
+```cpp
+// No curve (linear response)
+controller.setCurves(0, 0);
+
+// Aggressive curve for fine control
+controller.setCurves(8, 8);
+
+// Different curves for drive vs turn
+controller.setCurves(5, 8);
+```
+
+<Note>
+  Curves use the equation shown at: [https://www.desmos.com/calculator/puepnlubzh](https://www.desmos.com/calculator/puepnlubzh)
+</Note>
+
+### curve()
+
+Manually applies a curve to a joystick value.
+
+<ParamField path="x" type="double" required>
+  Input value (-127 to 127)
+</ParamField>
+
+<ParamField path="scale" type="double" required>
+  Curve scaling factor
+</ParamField>
+
+**Returns:** `double` - Curved output value
+
+```cpp
+double curved = controller.curve(100, 5);
+```
+
+## Selection Menu
+
+### select()
+
+Displays an interactive selection menu on the controller screen. The user can cycle through options with arrow keys and select with the A button.
+
+<ParamField path="names" type="std::vector<std::string>" required>
+  List of option names to display
+</ParamField>
+
+**Returns:** `int` - Index of the selected option (0-based)
+
+```cpp
+int color = controller.select({"blue", "red", "green"});
+
+if (color == 0) {
+    // Blue selected
+} else if (color == 1) {
+    // Red selected
+} else if (color == 2) {
+    // Green selected
+}
+```
+
+<Note>
+  This method is **blocking** - it will wait until the user makes a selection.
+</Note>
+
+### Selection Menu Controls
+
+- **Right Arrow**: Next option
+- **Left Arrow**: Previous option
+- **A Button**: Confirm selection
+
+### Autonomous Selection Example
+
+```cpp
+void initialize() {
+    int autonChoice = controller.select({
+        "Left Side AWP",
+        "Right Side AWP",
+        "Skills",
+        "Do Nothing"
+    });
+    
+    switch(autonChoice) {
+        case 0:
+            selectedAuton = leftAWP;
+            break;
+        case 1:
+            selectedAuton = rightAWP;
+            break;
+        case 2:
+            selectedAuton = skills;
+            break;
+        case 3:
+            selectedAuton = doNothing;
+            break;
+    }
+}
+```
+
+## Real-World Example
+
+Here's complete driver control code from VEX Worlds 2023:
+
+```cpp
+pros::Controller controller_pros(pros::E_CONTROLLER_MASTER);
+
+namespace robot {
+    keejLib::diffy chassMtrs({9, 8, 3, -1, -2, -20});
+    keejLib::mtrs intake({-11});
+    keejLib::mtrs cata({-18});
+    keejLib::Controller controller(controller_pros);
+    keejLib::Pis tsukasa({intakePis}, false);
+    keejLib::Pis expansion({expansionPis}, false);
+}
+
+void opcontrol() {
+    // Set drive curves for fine control
+    robot::controller.setCurves(5, 8);
+    
+    while (true) {
+        // Get all button states
+        std::vector<bool> cont = robot::controller.getAll(ALLBUTTONS);
+        
+        // One-line arcade drive
+        robot::chassMtrs.spinDiffy(
+            robot::controller.drive(1, keejLib::Controller::arcade)
+        );
+        
+        // Intake control with held buttons
+        if (cont[keejLib::R1]) robot::intake.spin(127);
+        else if (cont[keejLib::R2]) robot::intake.spin(-127);
+        else robot::intake.stop('c');
+        
+        // Piston controls with new presses
+        if (cont[keejLib::NR2]) robot::tsukasa.toggle();
+        if (cont[keejLib::NUP]) robot::expansion.toggle();
+        
+        // Catapult control
+        if (cont[keejLib::NL1]) robot::cata.spin(127);
+        
+        pros::delay(20);
+    }
+}
+```
+
+## Complete Button State Example
+
+```cpp
+std::vector<bool> cont = robot::controller.getAll(ALLBUTTONS);
+
+if (cont[keejLib::A])   std::cout << "button a is held!" << std::endl;
+if (cont[keejLib::NA])  std::cout << "button a was just pressed!" << std::endl;
+
+if (cont[keejLib::NL1]) std::cout << "new L1 press detected!" << std::endl;
+
+// Use held state for continuous actions
+if (cont[keejLib::R1]) motor.spin(127);
+
+// Use new press for toggles
+if (cont[keejLib::NUP]) piston.toggle();
+```
+
+## Best Practices
+
+### Use New Presses for Toggles
+
+```cpp
+// Good: Only toggles once per button press
+if (cont[keejLib::NR1]) piston.toggle();
+
+// Bad: Will toggle multiple times while held
+if (cont[keejLib::R1]) piston.toggle();
+```
+
+### Use Held State for Continuous Control
+
+```cpp
+// Good: Motor runs while button is held
+if (cont[keejLib::R1]) motor.spin(127);
+else motor.stop('c');
+
+// Bad: Motor only runs for one frame
+if (cont[keejLib::NR1]) motor.spin(127);
+```
+
+### Combine with Differential Groups
+
+```cpp
+// Simplest possible drive control
+chassMtrs.spinDiffy(controller.drive(1, keejLib::Controller::arcade));
+```
+
+### Use ALLBUTTONS Macro
+
+```cpp
+// Good: Gets all buttons efficiently
+std::vector<bool> cont = controller.getAll(ALLBUTTONS);
+
+// Less convenient: Manually specify each button
+std::vector<bool> cont = controller.getAll({
+    pros::E_CONTROLLER_DIGITAL_L1,
+    pros::E_CONTROLLER_DIGITAL_L2,
+    // ... etc
+});
+```
+
+## See Also
+
+- [Differential Groups](/hardware/differential-groups) - For integration with drive control
+- [Pistons](/hardware/pistons) - For using button states with pneumatic control
+- [Motor Groups](/hardware/motor-groups) - For basic motor control

@@ -1,0 +1,736 @@
+---
+title: Chassis
+description: Complete chassis control system with odometry and motion algorithms
+---
+
+The `Chassis` class provides a complete chassis control system with odometry tracking, PID control, and advanced motion algorithms for autonomous movement.
+
+## Constructor
+
+### Chassis (with horizontal distance sensor)
+
+```cpp
+Chassis(DriveTrain *dt, ChassConstants constants, pros::Imu *imu,
+        pros::Rotation *vertEnc, pros::Rotation *horizEnc, 
+        pros::Distance *horizDist)
+```
+
+Creates a new Chassis object with all sensors including a horizontal distance sensor.
+
+<ParamField path="dt" type="DriveTrain*" required>
+  Pointer to the DriveTrain object controlling the motors
+</ParamField>
+
+<ParamField path="constants" type="ChassConstants" required>
+  Constants defining the physical dimensions of the chassis (see ChassConstants struct)
+</ParamField>
+
+<ParamField path="imu" type="pros::Imu*" required>
+  Pointer to the IMU sensor for heading tracking
+</ParamField>
+
+<ParamField path="vertEnc" type="pros::Rotation*" required>
+  Pointer to the vertical tracking wheel encoder
+</ParamField>
+
+<ParamField path="horizEnc" type="pros::Rotation*" required>
+  Pointer to the horizontal tracking wheel encoder
+</ParamField>
+
+<ParamField path="horizDist" type="pros::Distance*" required>
+  Pointer to the horizontal distance sensor for additional tracking
+</ParamField>
+
+### Chassis (without horizontal distance sensor)
+
+```cpp
+Chassis(DriveTrain *dt, ChassConstants constants, pros::Imu *imu,
+        pros::Rotation *vertEnc, pros::Rotation *horizEnc)
+```
+
+Creates a new Chassis object without a horizontal distance sensor.
+
+<ParamField path="dt" type="DriveTrain*" required>
+  Pointer to the DriveTrain object controlling the motors
+</ParamField>
+
+<ParamField path="constants" type="ChassConstants" required>
+  Constants defining the physical dimensions of the chassis
+</ParamField>
+
+<ParamField path="imu" type="pros::Imu*" required>
+  Pointer to the IMU sensor for heading tracking
+</ParamField>
+
+<ParamField path="vertEnc" type="pros::Rotation*" required>
+  Pointer to the vertical tracking wheel encoder
+</ParamField>
+
+<ParamField path="horizEnc" type="pros::Rotation*" required>
+  Pointer to the horizontal tracking wheel encoder
+</ParamField>
+
+## ChassConstants Struct
+
+```cpp
+struct ChassConstants {
+    double horizWidth;
+    double vertWidth;
+    double trackDia;
+    double vertDia;
+    double horizDia;
+};
+```
+
+<ParamField path="horizWidth" type="double">
+  Horizontal distance from the tracking center to the horizontal tracking wheel (inches)
+</ParamField>
+
+<ParamField path="vertWidth" type="double">
+  Horizontal distance from the tracking center to the vertical tracking wheel (inches)
+</ParamField>
+
+<ParamField path="trackDia" type="double">
+  Diameter of the drive wheels (inches)
+</ParamField>
+
+<ParamField path="vertDia" type="double">
+  Diameter of the vertical tracking wheel (inches)
+</ParamField>
+
+<ParamField path="horizDia" type="double">
+  Diameter of the horizontal tracking wheel (inches)
+</ParamField>
+
+## MotionParams Struct
+
+```cpp
+struct MotionParams {
+    bool async;
+    int timeout = 3000;
+    double vStart = 0;
+    double vMin = 13;
+    double vMax = 127;
+    double angMin = 0;
+    double angMax = 127;
+    double settleRange;
+    double settleTime;
+    Exit* exit = nullptr;
+    double rotationCut;
+    double drift = 0;
+    bool reverse = false;
+    double within = 0;
+    double slew = 0;
+    double turnBias = -1;
+    bool debug = false;
+};
+```
+
+<ParamField path="async" type="bool">
+  Whether the motion should run asynchronously (true) or block until complete (false)
+</ParamField>
+
+<ParamField path="timeout" type="int" default="3000">
+  Maximum time in milliseconds to wait for motion to complete
+</ParamField>
+
+<ParamField path="vStart" type="double" default="0">
+  Starting velocity for the motion
+</ParamField>
+
+<ParamField path="vMin" type="double" default="13">
+  Minimum linear velocity during motion
+</ParamField>
+
+<ParamField path="vMax" type="double" default="127">
+  Maximum linear velocity during motion
+</ParamField>
+
+<ParamField path="angMin" type="double" default="0">
+  Minimum angular velocity during motion
+</ParamField>
+
+<ParamField path="angMax" type="double" default="127">
+  Maximum angular velocity during motion
+</ParamField>
+
+<ParamField path="settleRange" type="double">
+  Distance range within which the robot is considered settled
+</ParamField>
+
+<ParamField path="settleTime" type="double">
+  Time in milliseconds the robot must remain within settleRange to be considered settled
+</ParamField>
+
+<ParamField path="exit" type="Exit*" default="nullptr">
+  Custom exit condition for the motion (see Exit classes)
+</ParamField>
+
+<ParamField path="rotationCut" type="double">
+  Distance at which to stop rotating towards the target
+</ParamField>
+
+<ParamField path="drift" type="double" default="0">
+  Drift compensation factor for curved movements
+</ParamField>
+
+<ParamField path="reverse" type="bool" default="false">
+  Whether to drive in reverse
+</ParamField>
+
+<ParamField path="within" type="double" default="0">
+  Distance to stop before reaching the target
+</ParamField>
+
+<ParamField path="slew" type="double" default="0">
+  Slew rate for velocity ramping
+</ParamField>
+
+<ParamField path="turnBias" type="double" default="-1">
+  Bias for turn direction (-1 for automatic)
+</ParamField>
+
+<ParamField path="debug" type="bool" default="false">
+  Enable debug output for motion
+</ParamField>
+
+## Configuration Methods
+
+### startTracking
+
+```cpp
+void startTracking()
+```
+
+Starts the odometry tracking task. Must be called before using any motion methods.
+
+### setConstants
+
+```cpp
+void setConstants(PIDConstants linear, PIDConstants angular)
+```
+
+Sets both linear and angular PID constants for basic movements.
+
+<ParamField path="linear" type="PIDConstants" required>
+  PID constants for linear movements
+</ParamField>
+
+<ParamField path="angular" type="PIDConstants" required>
+  PID constants for angular (turning) movements
+</ParamField>
+
+### setLin
+
+```cpp
+void setLin(PIDConstants linear)
+```
+
+Sets only the linear PID constants.
+
+<ParamField path="linear" type="PIDConstants" required>
+  PID constants for linear movements
+</ParamField>
+
+### setAng
+
+```cpp
+void setAng(PIDConstants angular)
+```
+
+Sets only the angular PID constants.
+
+<ParamField path="angular" type="PIDConstants" required>
+  PID constants for angular (turning) movements
+</ParamField>
+
+### setMTP
+
+```cpp
+void setMTP(PIDConstants lin, PIDConstants ang)
+```
+
+Sets PID constants for move-to-point movements.
+
+<ParamField path="lin" type="PIDConstants" required>
+  PID constants for linear control during move-to-point
+</ParamField>
+
+<ParamField path="ang" type="PIDConstants" required>
+  PID constants for angular control during move-to-point
+</ParamField>
+
+### setMTPose
+
+```cpp
+void setMTPose(PIDConstants lin, PIDConstants ang)
+```
+
+Sets PID constants for move-to-pose movements.
+
+<ParamField path="lin" type="PIDConstants" required>
+  PID constants for linear control during move-to-pose
+</ParamField>
+
+<ParamField path="ang" type="PIDConstants" required>
+  PID constants for angular control during move-to-pose
+</ParamField>
+
+### setTurn
+
+```cpp
+void setTurn(PIDConstants turn)
+```
+
+Sets PID constants for turn-in-place movements.
+
+<ParamField path="turn" type="PIDConstants" required>
+  PID constants for turning in place
+</ParamField>
+
+### setColor
+
+```cpp
+void setColor(Color c)
+```
+
+Sets the team color for alliance-specific calculations.
+
+<ParamField path="c" type="Color" required>
+  Team color (red, blue, or none)
+</ParamField>
+
+### setPose
+
+```cpp
+void setPose(Pose p)
+```
+
+Manually sets the robot's current pose.
+
+<ParamField path="p" type="Pose" required>
+  The new pose (position and heading) of the robot
+</ParamField>
+
+### setAlternateOffsets
+
+```cpp
+void setAlternateOffsets(std::pair<double, double> offsets)
+```
+
+Sets alternate encoder offsets for tracking calibration.
+
+<ParamField path="offsets" type="std::pair<double, double>" required>
+  Pair of vertical and horizontal encoder offsets
+</ParamField>
+
+### useAlternateOffsets
+
+```cpp
+void useAlternateOffsets(bool yes)
+```
+
+Enables or disables the use of alternate encoder offsets.
+
+<ParamField path="yes" type="bool" required>
+  True to use alternate offsets, false to use default offsets
+</ParamField>
+
+## State Query Methods
+
+### getPose
+
+```cpp
+Pose getPose()
+```
+
+Returns the current pose (position and heading) of the robot.
+
+**Returns:** Current Pose with x, y position and heading
+
+### getTheta
+
+```cpp
+double getTheta()
+```
+
+Returns the current heading of the robot in degrees.
+
+**Returns:** Heading in degrees (0-360)
+
+### isSettled
+
+```cpp
+bool isSettled()
+```
+
+Checks if the robot has settled at its target position.
+
+**Returns:** True if settled, false if still moving
+
+### waitUntilSettled
+
+```cpp
+void waitUntilSettled()
+```
+
+Blocks execution until the robot has settled at its target position.
+
+### measureOffsets
+
+```cpp
+std::pair<double, double> measureOffsets(int iterations)
+```
+
+Measures and returns the encoder offsets by sampling sensor data.
+
+<ParamField path="iterations" type="int" required>
+  Number of samples to take for measurement
+</ParamField>
+
+**Returns:** Pair of vertical and horizontal encoder offsets
+
+## Motion Methods
+
+### turn
+
+```cpp
+void turn(double angle, MotionParams params)
+```
+
+Turns the robot to an absolute heading.
+
+<ParamField path="angle" type="double" required>
+  Target heading in degrees (0-360)
+</ParamField>
+
+<ParamField path="params" type="MotionParams" required>
+  Motion parameters controlling the turn behavior
+</ParamField>
+
+**Example:**
+```cpp
+MotionParams params;
+params.async = false;
+params.timeout = 2000;
+params.vMax = 100;
+chassis.turn(90, params); // Turn to face 90 degrees
+```
+
+### turnTo
+
+```cpp
+double turnTo(Pt target, MotionParams params)
+```
+
+Turns the robot to face a target point.
+
+<ParamField path="target" type="Pt" required>
+  Target point to face (x, y coordinates)
+</ParamField>
+
+<ParamField path="params" type="MotionParams" required>
+  Motion parameters controlling the turn behavior
+</ParamField>
+
+**Returns:** Final heading after turning
+
+### swingTo
+
+```cpp
+void swingTo(Pt target, double radius, MotionParams params)
+```
+
+Performs a swing turn to reach a target point along an arc.
+
+<ParamField path="target" type="Pt" required>
+  Target point to reach (x, y coordinates)
+</ParamField>
+
+<ParamField path="radius" type="double" required>
+  Radius of the swing arc
+</ParamField>
+
+<ParamField path="params" type="MotionParams" required>
+  Motion parameters controlling the swing behavior
+</ParamField>
+
+### driveAngle
+
+```cpp
+void driveAngle(double dist, double angle, MotionParams params,
+                bool absolute = false)
+```
+
+Drives a specified distance at a given angle.
+
+<ParamField path="dist" type="double" required>
+  Distance to drive in inches
+</ParamField>
+
+<ParamField path="angle" type="double" required>
+  Angle to drive at in degrees
+</ParamField>
+
+<ParamField path="params" type="MotionParams" required>
+  Motion parameters controlling the drive behavior
+</ParamField>
+
+<ParamField path="absolute" type="bool" default="false">
+  If true, angle is absolute; if false, angle is relative to current heading
+</ParamField>
+
+**Example:**
+```cpp
+MotionParams params;
+params.async = false;
+params.vMax = 127;
+chassis.driveAngle(24, 0, params); // Drive forward 24 inches
+```
+
+### mtpose
+
+```cpp
+void mtpose(Pose target, double dLead, MotionParams params, 
+            double gLead = -1, double gSettle = 10)
+```
+
+Moves to a target pose (position and heading) using advanced motion profiling.
+
+<ParamField path="target" type="Pose" required>
+  Target pose with position and heading
+</ParamField>
+
+<ParamField path="dLead" type="double" required>
+  Distance lead for heading correction
+</ParamField>
+
+<ParamField path="params" type="MotionParams" required>
+  Motion parameters controlling the movement
+</ParamField>
+
+<ParamField path="gLead" type="double" default="-1">
+  Gain for lead control (-1 for automatic)
+</ParamField>
+
+<ParamField path="gSettle" type="double" default="10">
+  Settling gain for final positioning
+</ParamField>
+
+### mtpoint
+
+```cpp
+void mtpoint(Pt target, MotionParams params)
+```
+
+Moves to a target point while maintaining heading towards that point.
+
+<ParamField path="target" type="Pt" required>
+  Target point (x, y coordinates)
+</ParamField>
+
+<ParamField path="params" type="MotionParams" required>
+  Motion parameters controlling the movement
+</ParamField>
+
+**Example:**
+```cpp
+Pt target = {24, 24};
+MotionParams params;
+params.async = false;
+params.vMax = 100;
+chassis.mtpoint(target, params); // Move to (24, 24)
+```
+
+### moveWithin
+
+```cpp
+void moveWithin(Pt targ, double dist, MotionParams params,
+                double angle = -1)
+```
+
+Moves to within a specified distance of a target point.
+
+<ParamField path="targ" type="Pt" required>
+  Target point (x, y coordinates)
+</ParamField>
+
+<ParamField path="dist" type="double" required>
+  Distance to stop before reaching the target (inches)
+</ParamField>
+
+<ParamField path="params" type="MotionParams" required>
+  Motion parameters controlling the movement
+</ParamField>
+
+<ParamField path="angle" type="double" default="-1">
+  Target heading during movement (-1 for automatic)
+</ParamField>
+
+### linTo
+
+```cpp
+void linTo(Pt targ, MotionParams params)
+```
+
+Moves to a target point in a straight line.
+
+<ParamField path="targ" type="Pt" required>
+  Target point (x, y coordinates)
+</ParamField>
+
+<ParamField path="params" type="MotionParams" required>
+  Motion parameters controlling the movement
+</ParamField>
+
+### driveLin
+
+```cpp
+void driveLin(int time, double speed, MotionParams params)
+```
+
+Drives at a constant speed for a specified time.
+
+<ParamField path="time" type="int" required>
+  Duration to drive in milliseconds
+</ParamField>
+
+<ParamField path="speed" type="double" required>
+  Speed to drive at (-127 to 127)
+</ParamField>
+
+<ParamField path="params" type="MotionParams" required>
+  Motion parameters (primarily for async control)
+</ParamField>
+
+### holdPos
+
+```cpp
+void holdPos(double angle, double target, double timeout, 
+             MotionParams params)
+```
+
+Holds position at a specific angle and distance for a duration.
+
+<ParamField path="angle" type="double" required>
+  Heading to maintain in degrees
+</ParamField>
+
+<ParamField path="target" type="double" required>
+  Target distance to maintain
+</ParamField>
+
+<ParamField path="timeout" type="double" required>
+  Duration to hold position in milliseconds
+</ParamField>
+
+<ParamField path="params" type="MotionParams" required>
+  Motion parameters for position holding
+</ParamField>
+
+### wallReset
+
+```cpp
+void wallReset(int wall, int numReadings, bool createTask = true)
+```
+
+Resets the robot's position by driving into a wall and recalibrating.
+
+<ParamField path="wall" type="int" required>
+  Wall identifier for which wall to reset against
+</ParamField>
+
+<ParamField path="numReadings" type="int" required>
+  Number of sensor readings to average for calibration
+</ParamField>
+
+<ParamField path="createTask" type="bool" default="true">
+  Whether to create a new task for the reset operation
+</ParamField>
+
+## Advanced Methods
+
+### pidMTPVel
+
+```cpp
+std::pair<double, double> pidMTPVel(Pt target, MotionParams params,
+                                     PID *lCont, PID *rCont,
+                                     double absDist)
+```
+
+Calculates left and right velocities for move-to-point using PID control.
+
+<ParamField path="target" type="Pt" required>
+  Target point (x, y coordinates)
+</ParamField>
+
+<ParamField path="params" type="MotionParams" required>
+  Motion parameters for the calculation
+</ParamField>
+
+<ParamField path="lCont" type="PID*" required>
+  Pointer to left side PID controller
+</ParamField>
+
+<ParamField path="rCont" type="PID*" required>
+  Pointer to right side PID controller
+</ParamField>
+
+<ParamField path="absDist" type="double" required>
+  Absolute distance to the target
+</ParamField>
+
+**Returns:** Pair of left and right motor velocities
+
+## Usage Example
+
+```cpp
+// Initialize drive motors
+pros::MotorGroup leftMotors({-1, -2, -3});
+pros::MotorGroup rightMotors({4, 5, 6});
+
+// Create drivetrain
+keejLib::DriveTrainConstants dtConsts = {
+    .gearRatio = 0.75,
+    .cartridge = 600,
+    .wheelDia = 3.25
+};
+keejLib::DriveTrain dt(&leftMotors, &rightMotors, dtConsts);
+
+// Create sensors
+pros::Imu imu(10);
+pros::Rotation vertEnc(11);
+pros::Rotation horizEnc(12);
+
+// Create chassis constants
+keejLib::ChassConstants chassConsts = {
+    .horizWidth = 6.5,
+    .vertWidth = 2.75,
+    .trackDia = 3.25,
+    .vertDia = 2.75,
+    .horizDia = 2.75
+};
+
+// Create chassis
+keejLib::Chassis chassis(&dt, chassConsts, &imu, &vertEnc, &horizEnc);
+
+// Configure PID constants
+keejLib::PIDConstants linConsts = {.kp = 8, .ki = 0, .kd = 0, .kf = 0};
+keejLib::PIDConstants angConsts = {.kp = 5, .ki = 0, .kd = 0, .kf = 0};
+chassis.setConstants(linConsts, angConsts);
+
+// Start tracking
+chassis.startTracking();
+
+// Set starting pose
+chassis.setPose({{0, 0}, keejLib::Angle(0, keejLib::HEADING)});
+
+// Move to a point
+keejLib::MotionParams params;
+params.async = false;
+params.vMax = 100;
+chassis.mtpoint({24, 24}, params);
+
+// Turn to face a direction
+chassis.turn(90, params);
+```

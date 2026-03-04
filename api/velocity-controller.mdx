@@ -1,0 +1,270 @@
+---
+title: Velocity Controllers
+description: Velocity control classes for managing motor speeds and chassis velocities
+---
+
+## VelocityController
+
+A velocity controller that uses PID feedback and exponential moving average filtering to maintain target velocities.
+
+### Constructor
+
+```cpp
+VelocityController(PIDConstants cons, double ka)
+```
+
+<ParamField path="cons" type="PIDConstants">
+  PID tuning constants for velocity control
+</ParamField>
+
+<ParamField path="ka" type="double">
+  Alpha coefficient for the exponential moving average filter (0 < ka ≤ 1)
+</ParamField>
+
+### Methods
+
+#### setVelocity
+
+Sets the target velocity for the controller.
+
+```cpp
+void setVelocity(double v)
+```
+
+<ParamField path="v" type="double">
+  Target velocity in appropriate units
+</ParamField>
+
+#### getVoltage
+
+Calculates the required voltage to achieve the target velocity based on current velocity.
+
+```cpp
+double getVoltage(double curr)
+```
+
+<ParamField path="curr" type="double">
+  Current velocity measurement
+</ParamField>
+
+**Returns:** `double` - The voltage to apply to the motor
+
+### Example Usage
+
+```cpp
+#include "keejLib/control.h"
+
+// Setup velocity controller
+keejLib::PIDConstants velPID = {
+    .kp = 0.5,
+    .ki = 0.001,
+    .kd = 0.1,
+    .kf = 0.0,
+    .maxIntegral = 15.0,
+    .tolerance = 5.0,
+    .integralThreshold = 20.0
+};
+
+keejLib::VelocityController velController(velPID, 0.3);
+
+void maintainVelocity() {
+    double targetVelocity = 100.0; // RPM or similar unit
+    velController.setVelocity(targetVelocity);
+    
+    while (true) {
+        double currentVel = getMotorVelocity();
+        double voltage = velController.getVoltage(currentVel);
+        
+        setMotorVoltage(voltage);
+        pros::delay(10);
+    }
+}
+```
+
+---
+
+## VelocityManager
+
+Manages chassis velocities with configurable limits, slew rate control, and separate linear and angular constraints.
+
+### Constructor
+
+```cpp
+VelocityManager(
+    double vl = 0,
+    double va = 0,
+    double s = 0,
+    double linMin = 0,
+    double linMax = 127,
+    double angMin = 0,
+    double angMax = 127
+)
+```
+
+<ParamField path="vl" type="double" default="0">
+  Initial linear velocity
+</ParamField>
+
+<ParamField path="va" type="double" default="0">
+  Initial angular velocity
+</ParamField>
+
+<ParamField path="s" type="double" default="0">
+  Slew rate limit (0 = no slew rate limiting)
+</ParamField>
+
+<ParamField path="linMin" type="double" default="0">
+  Minimum linear velocity threshold
+</ParamField>
+
+<ParamField path="linMax" type="double" default="127">
+  Maximum linear velocity limit
+</ParamField>
+
+<ParamField path="angMin" type="double" default="0">
+  Minimum angular velocity threshold
+</ParamField>
+
+<ParamField path="angMax" type="double" default="127">
+  Maximum angular velocity limit
+</ParamField>
+
+### Methods
+
+#### update
+
+Updates the velocity manager with new target velocities and returns constrained chassis velocities.
+
+```cpp
+ChassVelocities update(std::pair<double, double> vals)
+```
+
+<ParamField path="vals" type="std::pair<double, double>">
+  Pair of (linear, angular) velocity commands
+</ParamField>
+
+**Returns:** `ChassVelocities` - Structure containing left and right motor velocities
+
+#### setLinMin
+
+Sets the minimum linear velocity threshold.
+
+```cpp
+void setLinMin(double newLinMin)
+```
+
+<ParamField path="newLinMin" type="double">
+  New minimum linear velocity
+</ParamField>
+
+#### setLinMax
+
+Sets the maximum linear velocity limit.
+
+```cpp
+void setLinMax(double newLinMax)
+```
+
+<ParamField path="newLinMax" type="double">
+  New maximum linear velocity
+</ParamField>
+
+#### setAngMin
+
+Sets the minimum angular velocity threshold.
+
+```cpp
+void setAngMin(double newAngMin)
+```
+
+<ParamField path="newAngMin" type="double">
+  New minimum angular velocity
+</ParamField>
+
+#### setAngMax
+
+Sets the maximum angular velocity limit.
+
+```cpp
+void setAngMax(double newAngMax)
+```
+
+<ParamField path="newAngMax" type="double">
+  New maximum angular velocity
+</ParamField>
+
+#### setSlew
+
+Sets the slew rate limit for velocity changes.
+
+```cpp
+void setSlew(double newSlew)
+```
+
+<ParamField path="newSlew" type="double">
+  New slew rate limit
+</ParamField>
+
+### Example Usage
+
+```cpp
+#include "keejLib/control.h"
+
+// Create velocity manager with custom limits
+keejLib::VelocityManager velManager(
+    0,      // Initial linear velocity
+    0,      // Initial angular velocity
+    10.0,   // Slew rate
+    15.0,   // Linear minimum
+    127.0,  // Linear maximum
+    10.0,   // Angular minimum
+    100.0   // Angular maximum
+);
+
+void teleopControl() {
+    while (true) {
+        // Get joystick inputs
+        double forward = controller.get_analog(ANALOG_LEFT_Y);
+        double turn = controller.get_analog(ANALOG_RIGHT_X);
+        
+        // Update velocity manager
+        keejLib::ChassVelocities vels = velManager.update({forward, turn});
+        
+        // Apply to motors
+        leftMotor.move(vels.left);
+        rightMotor.move(vels.right);
+        
+        pros::delay(10);
+    }
+}
+
+// Dynamically adjust limits during match
+void adjustLimits(bool precisionMode) {
+    if (precisionMode) {
+        velManager.setLinMax(60.0);  // Reduce max speed
+        velManager.setAngMax(50.0);
+    } else {
+        velManager.setLinMax(127.0); // Full speed
+        velManager.setAngMax(100.0);
+    }
+}
+```
+
+### ChassVelocities
+
+Structure returned by VelocityManager containing differential drive motor commands.
+
+```cpp
+struct ChassVelocities {
+    double left;
+    double right;
+};
+```
+
+<ParamField path="left" type="double">
+  Velocity command for left side motors
+</ParamField>
+
+<ParamField path="right" type="double">
+  Velocity command for right side motors
+</ParamField>

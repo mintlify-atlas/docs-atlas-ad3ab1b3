@@ -1,0 +1,198 @@
+---
+title: Constants
+description: Configuration constants and parameters for keejLib
+---
+
+## PIDConstants
+
+Constants for configuring a PID controller.
+
+<ParamField path="kp" type="double">
+  Proportional gain - multiplier for the error term
+</ParamField>
+
+<ParamField path="ki" type="double">
+  Integral gain - multiplier for the accumulated error
+</ParamField>
+
+<ParamField path="kd" type="double">
+  Derivative gain - multiplier for the rate of error change
+</ParamField>
+
+<ParamField path="kf" type="double">
+  Feedforward gain - constant added to output
+</ParamField>
+
+<ParamField path="maxIntegral" type="double">
+  Maximum value for integral accumulation to prevent windup
+</ParamField>
+
+<ParamField path="tolerance" type="double">
+  Acceptable error threshold for considering the controller settled
+</ParamField>
+
+<ParamField path="integralThreshold" type="double">
+  Error threshold below which integral accumulation is enabled
+</ParamField>
+
+---
+
+## ProfileParams
+
+Parameters for motion profiling. All values are percentage values from -1 to 1.
+
+<ParamField path="speedPct" type="double">
+  Maximum speed as a percentage of the limit
+</ParamField>
+
+<ParamField path="accelPct" type="double">
+  Acceleration as a percentage of the limit
+</ParamField>
+
+<ParamField path="decelPct" type="double" default="1">
+  Deceleration as a percentage of the limit
+</ParamField>
+
+<ParamField path="startPct" type="double" default="0">
+  Starting speed as a percentage
+</ParamField>
+
+<ParamField path="endPct" type="double" default="0">
+  Ending speed as a percentage
+</ParamField>
+
+---
+
+## ProfileLimits
+
+Absolute limits for motion profiling.
+
+<ParamField path="maxSpeed" type="double">
+  Maximum speed limit
+</ParamField>
+
+<ParamField path="maxAccel" type="double">
+  Maximum acceleration limit
+</ParamField>
+
+<ParamField path="maxDecel" type="double">
+  Maximum deceleration limit
+</ParamField>
+
+---
+
+## ChassConstants
+
+Constants for configuring the chassis odometry system.
+
+<ParamField path="horizWidth" type="double">
+  Horizontal distance from tracking center to horizontal encoder (inches)
+</ParamField>
+
+<ParamField path="vertWidth" type="double">
+  Horizontal distance from tracking center to vertical encoder (inches)
+</ParamField>
+
+<ParamField path="trackDia" type="double">
+  Diameter of the tracking wheels on the drivetrain (inches)
+</ParamField>
+
+<ParamField path="vertDia" type="double">
+  Diameter of the vertical tracking wheel (inches)
+</ParamField>
+
+<ParamField path="horizDia" type="double">
+  Diameter of the horizontal tracking wheel (inches)
+</ParamField>
+
+---
+
+## DriveTrainConstants
+
+Constants for configuring the drivetrain.
+
+<ParamField path="gearRatio" type="double">
+  Gear ratio of the drivetrain (output/input)
+</ParamField>
+
+<ParamField path="cartridge" type="double">
+  Motor cartridge RPM (e.g., 200, 600)
+</ParamField>
+
+<ParamField path="wheelDia" type="double">
+  Diameter of the drive wheels (inches)
+</ParamField>
+
+---
+
+## MotionParams
+
+Parameters for controlling motion commands.
+
+<ParamField path="async" type="bool">
+  Whether to run the motion asynchronously
+</ParamField>
+
+<ParamField path="timeout" type="int" default="3000">
+  Maximum time for the motion in milliseconds
+</ParamField>
+
+<ParamField path="vStart" type="double" default="0">
+  Starting velocity
+</ParamField>
+
+<ParamField path="vMin" type="double" default="13">
+  Minimum linear velocity
+</ParamField>
+
+<ParamField path="vMax" type="double" default="127">
+  Maximum linear velocity
+</ParamField>
+
+<ParamField path="angMin" type="double" default="0">
+  Minimum angular velocity
+</ParamField>
+
+<ParamField path="angMax" type="double" default="127">
+  Maximum angular velocity
+</ParamField>
+
+<ParamField path="settleRange" type="double">
+  Error range within which the robot is considered settled
+</ParamField>
+
+<ParamField path="settleTime" type="double">
+  Time in milliseconds the robot must remain settled
+</ParamField>
+
+<ParamField path="exit" type="Exit*" default="nullptr">
+  Custom exit condition for the motion
+</ParamField>
+
+<ParamField path="rotationCut" type="double">
+  Distance at which to stop rotation correction
+</ParamField>
+
+<ParamField path="drift" type="double" default="0">
+  Drift compensation value
+</ParamField>
+
+<ParamField path="reverse" type="bool" default="false">
+  Whether to drive in reverse
+</ParamField>
+
+<ParamField path="within" type="double" default="0">
+  Distance threshold for moveWithin commands
+</ParamField>
+
+<ParamField path="slew" type="double" default="0">
+  Slew rate limit for velocity changes
+</ParamField>
+
+<ParamField path="turnBias" type="double" default="-1">
+  Bias for turning direction
+</ParamField>
+
+<ParamField path="debug" type="bool" default="false">
+  Enable debug output for the motion
+</ParamField>

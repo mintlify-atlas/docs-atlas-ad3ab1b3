@@ -1,0 +1,335 @@
+---
+title: Controller
+description: Enhanced VEX controller interface with drive modes and button management
+---
+
+The `Controller` class provides an enhanced interface for the VEX controller, including multiple drive modes, button state tracking, and curve adjustment.
+
+## Constructor
+
+```cpp
+Controller(pros::Controller& cont)
+```
+
+Creates a new Controller wrapper object.
+
+<ParamField path="cont" type="pros::Controller&" required>
+  Reference to a PROS controller object (pros::E_CONTROLLER_MASTER or pros::E_CONTROLLER_PARTNER)
+</ParamField>
+
+**Example:**
+```cpp
+pros::Controller master(pros::E_CONTROLLER_MASTER);
+keejLib::Controller controller(master);
+```
+
+## Drive Modes
+
+### driveMode Enum
+
+```cpp
+enum driveMode {
+    arcade,
+    tank,
+    reverseArcade,
+    curvature
+};
+```
+
+Defines the available drive control modes:
+
+- **arcade**: Single joystick controls both forward/backward and turning
+- **tank**: Left joystick controls left side, right joystick controls right side
+- **reverseArcade**: Arcade mode with reversed turning direction
+- **curvature**: Curvature drive (similar to arcade but with different turning characteristics)
+
+## Methods
+
+### drive
+
+```cpp
+ChassVelocities drive(int direction, Controller::driveMode mode)
+```
+
+Calculates motor velocities based on joystick input and selected drive mode.
+
+<ParamField path="direction" type="int" required>
+  Direction multiplier (1 for normal, -1 for reversed driving)
+</ParamField>
+
+<ParamField path="mode" type="Controller::driveMode" required>
+  Drive mode to use (arcade, tank, reverseArcade, or curvature)
+</ParamField>
+
+**Returns:** ChassVelocities struct with left and right motor values
+
+**Example:**
+```cpp
+keejLib::Controller controller(master);
+
+while (true) {
+    keejLib::ChassVelocities vel = controller.drive(1, keejLib::Controller::arcade);
+    dt.spinVolts(vel);
+    pros::delay(10);
+}
+```
+
+### setCurves
+
+```cpp
+void setCurves(double left, double right)
+```
+
+Sets the curve scaling factors for joystick input. Higher values create more aggressive exponential curves, making fine control easier at low speeds.
+
+<ParamField path="left" type="double" required>
+  Curve factor for left joystick (typical range: 1.0-5.0)
+</ParamField>
+
+<ParamField path="right" type="double" required>
+  Curve factor for right joystick (typical range: 1.0-5.0)
+</ParamField>
+
+**Example:**
+```cpp
+controller.setCurves(2.5, 2.5); // Set moderate exponential curve
+controller.setCurves(1.0, 1.0); // Linear response (no curve)
+controller.setCurves(4.0, 4.0); // Strong curve for precise control
+```
+
+### curve
+
+```cpp
+double curve(double x, double scale)
+```
+
+Applies an exponential curve to an input value. Used internally by drive methods but can be used independently.
+
+<ParamField path="x" type="double" required>
+  Input value to curve (typically -127 to 127 or -1 to 1)
+</ParamField>
+
+<ParamField path="scale" type="double" required>
+  Curve scaling factor (higher = more aggressive curve)
+</ParamField>
+
+**Returns:** Curved output value
+
+**Example:**
+```cpp
+double rawInput = master.get_analog(ANALOG_LEFT_Y);
+double curvedInput = controller.curve(rawInput, 2.5);
+```
+
+### select
+
+```cpp
+int select(std::vector<std::string> names)
+```
+
+Provides an interactive menu system on the controller screen for selecting options (e.g., autonomous routines).
+
+<ParamField path="names" type="std::vector<std::string>" required>
+  Vector of option names to display
+</ParamField>
+
+**Returns:** Index of the selected option (0-based)
+
+**Example:**
+```cpp
+std::vector<std::string> autonNames = {"Left Side", "Right Side", "Skills"};
+int selected = controller.select(autonNames);
+
+switch (selected) {
+    case 0:
+        // Run left side autonomous
+        break;
+    case 1:
+        // Run right side autonomous
+        break;
+    case 2:
+        // Run skills autonomous
+        break;
+}
+```
+
+### getAll
+
+```cpp
+std::vector<bool> getAll(std::vector<pros::controller_digital_e_t> buttons)
+```
+
+Gets the current state of multiple buttons at once.
+
+<ParamField path="buttons" type="std::vector<pros::controller_digital_e_t>" required>
+  Vector of PROS button enumerations to check
+</ParamField>
+
+**Returns:** Vector of boolean values indicating whether each button is pressed
+
+**Example:**
+```cpp
+auto buttons = controller.getAll({
+    pros::E_CONTROLLER_DIGITAL_L1,
+    pros::E_CONTROLLER_DIGITAL_R1,
+    pros::E_CONTROLLER_DIGITAL_A
+});
+
+if (buttons[0]) { /* L1 pressed */ }
+if (buttons[1]) { /* R1 pressed */ }
+if (buttons[2]) { /* A pressed */ }
+```
+
+### getReleased
+
+```cpp
+std::vector<bool> getReleased()
+```
+
+Detects button release events for all buttons. Returns true for a button if it was pressed in the previous check but is now released.
+
+**Returns:** Vector of boolean values indicating which buttons were just released
+
+**Example:**
+```cpp
+while (true) {
+    std::vector<bool> released = controller.getReleased();
+    
+    if (released[keejLib::buttons::L1]) {
+        // L1 was just released (not held)
+        toggleIntake();
+    }
+    
+    pros::delay(10);
+}
+```
+
+## Button Enumerations
+
+keejLib provides convenient button enumerations in the `keejLib::buttons` enum:
+
+```cpp
+enum buttons {
+    L1 = 0, NL1 = 1,      // L1 and "not L1"
+    L2 = 2, NL2 = 3,      // L2 and "not L2"
+    R1 = 4, NR1 = 5,      // R1 and "not R1"
+    R2 = 6, NR2 = 7,      // R2 and "not R2"
+    UP = 8, NUP = 9,      // Up arrow
+    DOWN = 10, NDOWN = 11, // Down arrow
+    LEFT = 12, NLEFT = 13, // Left arrow
+    RIGHT = 14, NRIGHT = 15, // Right arrow
+    X = 16, NX = 17,      // X button
+    B = 18, NB = 19,      // B button
+    Y = 20, NY = 21,      // Y button
+    A = 22, NA = 23       // A button
+};
+```
+
+## ALLBUTTONS Macro
+
+The `ALLBUTTONS` macro provides a convenient way to reference all controller buttons:
+
+```cpp
+#define ALLBUTTONS {pros::E_CONTROLLER_DIGITAL_L1, pros::E_CONTROLLER_DIGITAL_L2, ...}
+```
+
+**Example:**
+```cpp
+auto allButtonStates = controller.getAll(ALLBUTTONS);
+```
+
+## DRIVEMODE_NAMES Macro
+
+Provides string names for drive modes:
+
+```cpp
+#define DRIVEMODE_NAMES {"arcade", "tank", "reverse arcade", "curvature"}
+```
+
+**Example:**
+```cpp
+std::vector<std::string> modeNames = DRIVEMODE_NAMES;
+int modeIndex = controller.select(modeNames);
+keejLib::Controller::driveMode selectedMode = 
+    static_cast<keejLib::Controller::driveMode>(modeIndex);
+```
+
+## Complete Usage Example
+
+```cpp
+#include "keejLib/controller.h"
+#include "keejLib/chassis.h"
+
+// Initialize
+pros::Controller master(pros::E_CONTROLLER_MASTER);
+keejLib::Controller controller(master);
+
+// Set up drive curves for smoother control
+controller.setCurves(2.5, 2.5);
+
+// Autonomous selector
+void autonomous() {
+    std::vector<std::string> autons = {"Left AWP", "Right AWP", "Skills"};
+    int selected = controller.select(autons);
+    
+    switch (selected) {
+        case 0:
+            runLeftAWP();
+            break;
+        case 1:
+            runRightAWP();
+            break;
+        case 2:
+            runSkills();
+            break;
+    }
+}
+
+// Driver control
+void opcontrol() {
+    // Drive mode selector
+    std::vector<std::string> modeNames = DRIVEMODE_NAMES;
+    int modeIdx = controller.select(modeNames);
+    keejLib::Controller::driveMode currentMode = 
+        static_cast<keejLib::Controller::driveMode>(modeIdx);
+    
+    bool intakeState = false;
+    bool reversed = false;
+    
+    while (true) {
+        // Drive control
+        int direction = reversed ? -1 : 1;
+        keejLib::ChassVelocities vel = controller.drive(direction, currentMode);
+        dt.spinVolts(vel);
+        
+        // Button handling with release detection
+        std::vector<bool> released = controller.getReleased();
+        
+        if (released[keejLib::buttons::L1]) {
+            intakeState = !intakeState;
+            intake.move(intakeState ? 127 : 0);
+        }
+        
+        if (released[keejLib::buttons::A]) {
+            reversed = !reversed;
+            master.rumble(".");
+        }
+        
+        // Direct button checking for held actions
+        auto buttons = controller.getAll({
+            pros::E_CONTROLLER_DIGITAL_R1,
+            pros::E_CONTROLLER_DIGITAL_R2
+        });
+        
+        if (buttons[0]) {
+            catapult.move(127);  // Hold R1 to wind catapult
+        } else if (buttons[1]) {
+            catapult.move(-127); // Hold R2 to unwind
+        } else {
+            catapult.brake();
+        }
+        
+        pros::delay(10);
+    }
+}
+```

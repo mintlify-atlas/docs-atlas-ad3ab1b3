@@ -1,0 +1,213 @@
+---
+title: Installation
+description: Add keejLib to your PROS project and configure your development environment
+---
+
+keejLib integrates directly into your PROS project as a library. Follow these steps to get started.
+
+## Prerequisites
+
+Before installing keejLib, ensure you have:
+
+<Steps>
+  <Step title="PROS CLI installed">
+    Download and install the PROS CLI from [pros.cs.purdue.edu](https://pros.cs.purdue.edu/). Verify installation:
+    
+    ```bash
+    pros --version
+    ```
+  </Step>
+  
+  <Step title="C++ development environment">
+    Install a C++ IDE or editor. PROS officially supports:
+    - Visual Studio Code with the PROS extension
+    - Atom with the PROS plugin
+    - CLion
+  </Step>
+  
+  <Step title="Existing PROS project">
+    Create a new PROS project or use an existing one:
+    
+    ```bash
+    pros conduct new my-robot
+    cd my-robot
+    ```
+  </Step>
+</Steps>
+
+## Installation methods
+
+### Method 1: Clone the repository (recommended)
+
+This method gives you the full source code and makes it easy to customize the library.
+
+<Steps>
+  <Step title="Clone keejLib">
+    Navigate to your PROS project directory and clone the keejLib repository:
+    
+    ```bash
+    cd your-project-directory
+    git clone https://github.com/8pxl/keejlib.git
+    ```
+  </Step>
+  
+  <Step title="Copy library files">
+    Copy the library files to your project's `include` and `src` directories:
+    
+    ```bash
+    cp -r keejlib/source/lib/include/keejLib include/
+    cp -r keejlib/source/lib/src/keejLib src/
+    ```
+  </Step>
+  
+  <Step title="Include in your code">
+    Add the library header to your `main.h` or source files:
+    
+    ```cpp main.h
+    #include "keejLib/lib.h"
+    ```
+  </Step>
+</Steps>
+
+### Method 2: Manual download
+
+Download the source files directly without using git.
+
+<Steps>
+  <Step title="Download source">
+    Download the keejLib repository as a ZIP file from GitHub and extract it.
+  </Step>
+  
+  <Step title="Copy files">
+    Copy the `keejLib` folder from `source/lib/include/` to your project's `include/` directory.
+    
+    Copy the `keejLib` folder from `source/lib/src/` to your project's `src/` directory.
+  </Step>
+  
+  <Step title="Verify structure">
+    Your project structure should look like:
+    
+    ```
+    your-project/
+    ├── include/
+    │   ├── main.h
+    │   └── keejLib/
+    │       ├── lib.h
+    │       ├── chassis.h
+    │       ├── controller.h
+    │       ├── control.h
+    │       ├── util.h
+    │       └── piston.h
+    ├── src/
+    │   ├── main.cpp
+    │   └── keejLib/
+    │       ├── chassis.cpp
+    │       ├── control/
+    │       └── ...
+    └── ...
+    ```
+  </Step>
+</Steps>
+
+## Verify installation
+
+Create a simple test to verify keejLib is installed correctly:
+
+```cpp src/main.cpp
+#include "main.h"
+#include "keejLib/lib.h"
+
+void initialize() {
+    pros::lcd::initialize();
+    pros::lcd::print(0, "keejLib loaded successfully!");
+}
+
+void autonomous() {}
+
+void opcontrol() {}
+```
+
+<Steps>
+  <Step title="Build your project">
+    Compile the project to check for errors:
+    
+    ```bash
+    pros make
+    ```
+  </Step>
+  
+  <Step title="Upload to robot">
+    If compilation succeeds, upload to your V5 Brain:
+    
+    ```bash
+    pros upload
+    ```
+  </Step>
+  
+  <Step title="Test on robot">
+    Power on your robot and verify the message appears on the brain screen.
+  </Step>
+</Steps>
+
+<Warning>
+If you encounter compilation errors about missing headers, double-check that all keejLib files are in the correct directories and that your `#include` paths are correct.
+</Warning>
+
+## Project configuration
+
+### Compiler settings
+
+keejLib uses modern C++ features. Ensure your `Makefile` has the correct C++ standard:
+
+```makefile
+CXXFLAGS=-std=gnu++17
+```
+
+### Dependencies
+
+keejLib depends on standard PROS libraries:
+
+- `pros::Motor` and `pros::MotorGroup`
+- `pros::Controller`
+- `pros::Imu`
+- `pros::Rotation`
+- `pros::adi::DigitalOut`
+- `pros::Distance` (optional, for certain features)
+
+These are included with PROS by default.
+
+## Common issues
+
+<AccordionGroup>
+  <Accordion title="Linker errors about undefined references">
+    Make sure all `.cpp` files from keejLib's `src/` directory are in your project's `src/` folder. The PROS build system automatically compiles all `.cpp` files it finds.
+  </Accordion>
+  
+  <Accordion title="Cannot find keejLib headers">
+    Verify the include path. If you copied files to a different location, update your `#include` statements accordingly:
+    
+    ```cpp
+    // If keejLib is in include/keejLib/
+    #include "keejLib/lib.h"
+    
+    // If keejLib is directly in include/
+    #include "lib.h"
+    ```
+  </Accordion>
+  
+  <Accordion title="Build errors about C++ standard">
+    keejLib requires C++17. Update your Makefile's CXXFLAGS:
+    
+    ```makefile
+    CXXFLAGS=-std=gnu++17
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+With keejLib installed, you're ready to start building! Continue to the quickstart guide to create your first program.
+
+<Card title="Quickstart" icon="rocket" href="/quickstart">
+  Build your first robot program with keejLib
+</Card>

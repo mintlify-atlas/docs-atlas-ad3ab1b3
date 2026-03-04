@@ -1,0 +1,175 @@
+---
+title: PID
+description: PID controller implementation for precise control systems
+---
+
+## PID
+
+A PID (Proportional-Integral-Derivative) controller class for closed-loop control systems in robotics applications.
+
+### Constructor
+
+```cpp
+PID(PIDConstants constants)
+```
+
+<ParamField path="constants" type="PIDConstants">
+  PID tuning constants and configuration parameters
+</ParamField>
+
+### Methods
+
+#### out
+
+Calculates the PID output based on the current error.
+
+```cpp
+double out(double error)
+```
+
+<ParamField path="error" type="double">
+  The current error value (target - actual)
+</ParamField>
+
+**Returns:** `double` - The calculated control output
+
+#### getError
+
+Returns the most recent error value.
+
+```cpp
+double getError()
+```
+
+**Returns:** `double` - The current error value
+
+#### getDerivative
+
+Returns the current derivative term.
+
+```cpp
+double getDerivative()
+```
+
+**Returns:** `double` - The derivative of the error
+
+#### resetIntegral
+
+Resets the integral accumulator to zero.
+
+```cpp
+void resetIntegral()
+```
+
+Useful for preventing integral windup when the controller is disabled or when starting a new control sequence.
+
+### Example Usage
+
+```cpp
+#include "keejLib/control.h"
+
+// Define PID constants
+keejLib::PIDConstants drivePID = {
+    .kp = 2.0,
+    .ki = 0.01,
+    .kd = 0.5,
+    .kf = 0.0,
+    .maxIntegral = 50.0,
+    .tolerance = 2.0,
+    .integralThreshold = 10.0
+};
+
+// Create PID controller
+keejLib::PID controller(drivePID);
+
+void moveToPosition(double target) {
+    while (true) {
+        double currentPos = getCurrentPosition();
+        double error = target - currentPos;
+        
+        double output = controller.out(error);
+        
+        // Check if within tolerance
+        if (std::abs(controller.getError()) < 2.0) {
+            break;
+        }
+        
+        setMotorPower(output);
+        pros::delay(10);
+    }
+}
+```
+
+---
+
+## PIDConstants
+
+Structure containing all tuning parameters for a PID controller.
+
+```cpp
+struct PIDConstants {
+    double kp;
+    double ki;
+    double kd;
+    double kf;
+    double maxIntegral;
+    double tolerance;
+    double integralThreshold;
+};
+```
+
+### Fields
+
+<ParamField path="kp" type="double">
+  Proportional gain - determines the reaction to the current error
+</ParamField>
+
+<ParamField path="ki" type="double">
+  Integral gain - determines the reaction to the sum of recent errors
+</ParamField>
+
+<ParamField path="kd" type="double">
+  Derivative gain - determines the reaction to the rate of error change
+</ParamField>
+
+<ParamField path="kf" type="double">
+  Feedforward gain - adds a constant factor to the output
+</ParamField>
+
+<ParamField path="maxIntegral" type="double">
+  Maximum value for the integral accumulator to prevent integral windup
+</ParamField>
+
+<ParamField path="tolerance" type="double">
+  Acceptable error range for determining if the controller has reached the target
+</ParamField>
+
+<ParamField path="integralThreshold" type="double">
+  Error threshold below which the integral term begins accumulating
+</ParamField>
+
+### Example
+
+```cpp
+// Tuned PID constants for a drive system
+keejLib::PIDConstants driveConstants = {
+    .kp = 2.5,
+    .ki = 0.005,
+    .kd = 0.8,
+    .kf = 0.1,
+    .maxIntegral = 30.0,
+    .tolerance = 1.5,
+    .integralThreshold = 15.0
+};
+
+// Tuned PID constants for a turn system
+keejLib::PIDConstants turnConstants = {
+    .kp = 3.0,
+    .ki = 0.01,
+    .kd = 0.3,
+    .kf = 0.0,
+    .maxIntegral = 20.0,
+    .tolerance = 2.0,
+    .integralThreshold = 10.0
+};
+```

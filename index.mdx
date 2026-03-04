@@ -1,97 +1,298 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "keejLib Documentation"
+description: "A beginner-friendly yet powerful C++ library for PROS robotics with advanced motion control"
+mode: custom
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-gradient-to-br from-[#4680d8] via-[#5a8de0] to-[#6c9ae8] dark:from-[#1a2640] dark:via-[#253350] dark:to-[#304060] py-20">
+  <div className="max-w-6xl mx-auto px-6 lg:px-8">
+    <div className="grid lg:grid-cols-12 gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">
+          Build better robots with keejLib
+        </h1>
+        <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-2xl">
+          A powerful C++ library for PROS that simplifies hardware control and delivers advanced autonomous movement algorithms for competitive robotics.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a
+            href="/quickstart"
+            className="inline-flex items-center px-6 py-3 rounded-lg bg-white text-[#4680d8] font-semibold hover:bg-gray-100 transition-colors no-underline"
+          >
+            Get Started
+          </a>
+          <a
+            href="/api/chassis"
+            className="inline-flex items-center px-6 py-3 rounded-lg border border-white/30 bg-white/10 text-white font-semibold hover:bg-white/20 transition-colors no-underline"
+          >
+            API Reference
+          </a>
+        </div>
+      </div>
+      <div className="lg:col-span-5 hidden lg:block">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent rounded-2xl blur-2xl"></div>
+          <div className="relative bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
+            <pre className="text-sm text-white overflow-x-auto">
+              <code>{`keejLib::Chassis chassis(
+  &driveTrain,
+  constants,
+  &imu,
+  &vertEnc,
+  &horizEnc
+);
 
-Get your documentation site up and running in minutes.
+chassis.mtpose(
+  {target, heading},
+  dLead,
+  params
+);`}</code>
+            </pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+    Quick start
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Get keejLib integrated into your PROS project in minutes
+  </p>
+  
+  <Steps>
+    <Step title="Clone the repository">
+      Add keejLib to your PROS project by cloning the repository into your project directory.
+      
+      ```bash
+      cd your-pros-project
+      git clone https://github.com/8pxl/keejLib.git lib
+      ```
+    </Step>
+    
+    <Step title="Include the library">
+      Include keejLib in your source files. All functionality is under the `keejLib` namespace.
+      
+      ```cpp
+      #include "keejLib/lib.h"
+      
+      // Access motor groups
+      keejLib::DriveTrain dt(&leftMotors, &rightMotors, dtConsts);
+      
+      // Access chassis control
+      keejLib::Chassis chassis(&dt, chassConsts, &imu, &vertEnc, &horizEnc);
+      ```
+    </Step>
+    
+    <Step title="Initialize your hardware">
+      Set up your motors, sensors, and chassis with the appropriate constants for your robot.
+      
+      ```cpp
+      // Define motor groups
+      pros::MotorGroup leftMotors({-1, -2, -3});
+      pros::MotorGroup rightMotors({4, 5, 6});
+      
+      // Create drivetrain
+      keejLib::DriveTrainConstants dtConsts = {
+        .gearRatio = 0.6,
+        .cartridge = 600,
+        .wheelDia = 3.25
+      };
+      
+      keejLib::DriveTrain dt(&leftMotors, &rightMotors, dtConsts);
+      ```
+      
+      <Note>
+        You'll need to configure chassis constants specific to your robot's dimensions and tracking wheels. See the [setup guide](/chassis/setup) for details.
+      </Note>
+    </Step>
+    
+    <Step title="Start using advanced features">
+      Use keejLib's powerful autonomous movement algorithms to control your robot.
+      
+      ```cpp
+      // Move to a specific pose with heading control
+      chassis.mtpose(
+        {{48, 24}, keejLib::Angle(90, keejLib::HEADING)},
+        12,
+        params
+      );
+      
+      // PID turn to angle
+      chassis.turn(90, params);
+      
+      // Move to point with boomerang controller
+      chassis.mtpoint({36, 36}, params);
+      ```
+    </Step>
+  </Steps>
+</div>
 
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+    Explore by feature
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Discover what keejLib can do for your robot
+  </p>
+  
+  <CardGroup cols={3}>
     <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+      title="Hardware abstractions"
+      icon="microchip"
+      href="/hardware/motor-groups"
+    >
+      Simplified wrappers for motors, differential groups, pistons, and controller input
+    </Card>
+    <Card
+      title="Chassis control"
+      icon="car"
+      href="/chassis/overview"
+    >
+      Advanced odometry tracking and autonomous movement algorithms
+    </Card>
+    <Card
+      title="PID & motion profiling"
+      icon="chart-line"
+      href="/control/pid"
+    >
+      Reusable PID controllers and asymmetric trapezoidal motion profiles
+    </Card>
+    <Card
+      title="Exit conditions"
+      icon="flag-checkered"
+      href="/control/exit-conditions"
+    >
+      Flexible exit conditions for autonomous routines including timeouts, ranges, and sensors
+    </Card>
+    <Card
+      title="Geometry utilities"
+      icon="compass-drafting"
+      href="/utilities/geometry"
+    >
+      Angle handling, point math, and helper functions for robot positioning
+    </Card>
+    <Card
+      title="Controller helpers"
+      icon="gamepad"
+      href="/hardware/controller"
+    >
+      Drive curves, button detection, and an intuitive selection menu system
+    </Card>
+  </CardGroup>
+</div>
 
-## Create beautiful pages
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+    Key capabilities
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Built for competitive robotics with powerful features
+  </p>
+  
+  <div className="grid md:grid-cols-2 gap-6">
+    <div className="border dark:border-[#27272a] border-gray-200 rounded-xl p-6 dark:bg-[#1a1d27] bg-gray-50">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#4680d8]/10 dark:bg-[#4680d8]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#4680d8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Differential motor groups
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Control tank drive chassis with independent left and right motor groups, perfect for arcade or tank drive control schemes.
+          </p>
+        </div>
+      </div>
+    </div>
+    
+    <div className="border dark:border-[#27272a] border-gray-200 rounded-xl p-6 dark:bg-[#1a1d27] bg-gray-50">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#4680d8]/10 dark:bg-[#4680d8]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#4680d8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Advanced odometry
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Track robot position using IMU and tracking wheels with horizontal and vertical encoders for precise autonomous movement.
+          </p>
+        </div>
+      </div>
+    </div>
+    
+    <div className="border dark:border-[#27272a] border-gray-200 rounded-xl p-6 dark:bg-[#1a1d27] bg-gray-50">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#4680d8]/10 dark:bg-[#4680d8]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#4680d8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Motion profiling
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Asymmetric trapezoidal velocity profiles with separate acceleration and deceleration rates for forward and reverse movement.
+          </p>
+        </div>
+      </div>
+    </div>
+    
+    <div className="border dark:border-[#27272a] border-gray-200 rounded-xl p-6 dark:bg-[#1a1d27] bg-gray-50">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#4680d8]/10 dark:bg-[#4680d8]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#4680d8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Boomerang controller
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Smooth, curved paths to target points with automatic heading correction and drift compensation for precise autonomous routines.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="border dark:border-[#27272a] border-gray-200 rounded-2xl p-8 dark:bg-[#1a1d27] bg-gray-50">
+    <div className="text-center max-w-2xl mx-auto">
+      <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+        Ready to build?
+      </h2>
+      <p className="text-base text-gray-600 dark:text-gray-400 mb-6">
+        Start using keejLib in your PROS project and take your robot control to the next level.
+      </p>
+      <div className="flex flex-wrap gap-4 justify-center">
+        <a
+          href="/installation"
+          className="inline-flex items-center px-6 py-3 rounded-lg bg-[#4680d8] text-white font-semibold hover:bg-[#3a6fc0] transition-colors no-underline"
+        >
+          View Installation Guide
+        </a>
+        <a
+          href="https://github.com/8pxl/keejLib"
+          className="inline-flex items-center px-6 py-3 rounded-lg border dark:border-[#27272a] border-gray-200 dark:bg-[#242838] bg-white text-gray-900 dark:text-white font-semibold hover:dark:bg-[#2d3345] hover:bg-gray-50 transition-colors no-underline"
+        >
+          View on GitHub
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

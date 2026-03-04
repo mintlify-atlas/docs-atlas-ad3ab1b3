@@ -1,0 +1,250 @@
+---
+title: 'PID Controller'
+description: 'Proportional-Integral-Derivative controller implementation for precise motion control'
+---
+
+## Overview
+
+The `PID` class provides a reusable implementation of the PID (Proportional-Integral-Derivative) controller for closed-loop control systems. It's commonly used for precise movement control in autonomous routines.
+
+## PIDConstants Struct
+
+The `PIDConstants` struct holds all tuning parameters for the PID controller:
+
+```cpp
+struct PIDConstants {
+    double kp;                 // Proportional gain
+    double ki;                 // Integral gain
+    double kd;                 // Derivative gain
+    double kf;                 // Feedforward gain
+    double maxIntegral;        // Maximum integral accumulation
+    double tolerance;          // Error threshold to reset integral
+    double integralThreshold;  // Error range to allow integral accumulation
+};
+```
+
+### Parameters Explained
+
+- **kp** (Proportional): Responds to current error. Higher values = faster response but more oscillation
+- **ki** (Integral): Corrects accumulated error over time. Eliminates steady-state error
+- **kd** (Derivative): Dampens oscillations by responding to rate of change
+- **kf** (Feedforward): Additional gain applied to error, useful for friction compensation
+- **maxIntegral**: Prevents integral windup by clamping accumulated error
+- **tolerance**: When error falls below this value, integral resets to prevent overshoot
+- **integralThreshold**: Integral only accumulates when error is within this range
+
+## PID Class
+
+### Constructor
+
+```cpp
+PID(PIDConstants constants);
+```
+
+Initializes a PID controller with the specified constants.
+
+### Methods
+
+#### out()
+
+```cpp
+double out(double error);
+```
+
+Calculates the PID output based on the current error.
+
+**Parameters:**
+- `error` - Current error value (target - current)
+
+**Returns:**
+- Control output value
+
+**Behavior:**
+- Integral accumulates only when error is within `integralThreshold`
+- Integral resets when error falls below `tolerance`
+- Integral resets when error sign changes (crossing target)
+- Integral is clamped to `[-maxIntegral, maxIntegral]`
+- Derivative is calculated as the change in error since last call
+
+#### getError()
+
+```cpp
+double getError();
+```
+
+Returns the current error value.
+
+#### getDerivative()
+
+```cpp
+double getDerivative();
+```
+
+Returns the current derivative term.
+
+#### resetIntegral()
+
+```cpp
+void resetIntegral();
+```
+
+Manually resets the integral accumulator to zero. Useful when changing targets or movement modes.
+
+## Usage Example
+
+### Basic PID Loop
+
+```cpp
+// Define PID constants
+keejLib::PIDConstants drivePID = {
+    .kp = 5.0,
+    .ki = 0.1,
+    .kd = 0.5,
+    .kf = 0.0,
+    .maxIntegral = 20.0,
+    .tolerance = 2.0,
+    .integralThreshold = 10.0
+};
+
+// Create PID controller
+keejLib::PID pidController(drivePID);
+
+// Target position
+double target = 24.0;  // inches
+
+// Control loop
+while (true) {
+    double current = getEncoderPosition();
+    double error = target - current;
+    
+    double output = pidController.out(error);
+    
+    // Apply output to motors
+    motors.spin(output);
+    
+    // Exit when close enough
+    if (std::abs(error) < 0.5) break;
+    
+    pros::delay(10);
+}
+```
+
+### PID for Turning
+
+```cpp
+keejLib::PIDConstants turnPID = {
+    .kp = 3.0,
+    .ki = 0.05,
+    .kd = 0.3,
+    .kf = 0.0,
+    .maxIntegral = 15.0,
+    .tolerance = 1.0,
+    .integralThreshold = 5.0
+};
+
+keejLib::PID turnController(turnPID);
+
+double targetHeading = 90.0;  // degrees
+
+while (true) {
+    double currentHeading = imu.get_heading();
+    double error = targetHeading - currentHeading;
+    
+    // Normalize error to [-180, 180]
+    while (error > 180) error -= 360;
+    while (error < -180) error += 360;
+    
+    double output = turnController.out(error);
+    
+    chassis.spinDiffy(output, -output);
+    
+    if (std::abs(error) < 1.0) break;
+    
+    pros::delay(10);
+}
+```
+
+## Tuning Guide
+
+### Step-by-Step Tuning Process
+
+1. **Start with P only** (set ki=0, kd=0)
+   - Increase kp until system oscillates
+   - Reduce kp to about 60-70% of oscillation point
+
+2. **Add D for damping**
+   - Increase kd to reduce oscillations
+   - Typical ratio: kd ≈ 0.1 * kp
+
+3. **Add I for steady-state error**
+   - Start with very small ki (0.01 - 0.1)
+   - Set `integralThreshold` to limit when integral accumulates
+   - Set `maxIntegral` to prevent windup
+
+4. **Tune integral parameters**
+   - `tolerance`: Set to acceptable error range
+   - `integralThreshold`: Typically 2-5x tolerance
+   - `maxIntegral`: Enough to eliminate error but not cause overshoot
+
+### Example Tuning Values
+
+**Fast, Aggressive Movement:**
+```cpp
+PIDConstants aggressive = {
+    .kp = 8.0,
+    .ki = 0.2,
+    .kd = 1.0,
+    .kf = 0.0,
+    .maxIntegral = 25.0,
+    .tolerance = 2.0,
+    .integralThreshold = 8.0
+};
+```
+
+**Smooth, Precise Movement:**
+```cpp
+PIDConstants smooth = {
+    .kp = 4.0,
+    .ki = 0.05,
+    .kd = 0.4,
+    .kf = 0.0,
+    .maxIntegral = 15.0,
+    .tolerance = 1.0,
+    .integralThreshold = 5.0
+};
+```
+
+## Implementation Details
+
+The PID output is calculated using the formula:
+
+```
+output = (error × kp) + (integral × ki) + (derivative × kd) + (error × kf)
+```
+
+### Integral Anti-Windup
+
+The controller implements multiple integral protection mechanisms:
+
+```cpp control.h/pid.cpp:7-14
+- Integral only accumulates within integralThreshold
+- Integral resets when error < tolerance
+- Integral resets on sign change (prevents overshoot)
+- Integral clamped to [-maxIntegral, maxIntegral]
+```
+
+### Derivative Calculation
+
+Derivative is calculated as the raw change in error:
+
+```cpp
+derivative = error - prevError
+```
+
+This is computed per iteration, not per unit time, so tune accordingly based on your loop timing.
+
+## See Also
+
+- [Exit Conditions](/control/exit-conditions) - Determine when PID movements should stop
+- [Motion Profiling](/control/motion-profiling) - Combine PID with velocity profiles
+- [Velocity Management](/control/velocity-management) - Apply constraints to PID output

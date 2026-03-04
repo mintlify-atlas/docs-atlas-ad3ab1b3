@@ -1,0 +1,98 @@
+---
+title: "Motor Groups"
+description: "Group multiple motors together for synchronized control"
+---
+
+## Overview
+
+Motor groups allow you to control multiple motors as a single unit. keejLib provides a convenient wrapper around PROS motor groups that can be initialized using just port numbers.
+
+## Initialization
+
+Motor groups are initialized by passing a vector of port numbers to the constructor:
+
+```cpp
+keejLib::mtrs intakeMtrs({1, 2});
+keejLib::mtrs catapult({-3, 4});  // Negative port numbers reverse the motor
+```
+
+<Note>
+  Use negative port numbers to reverse the direction of specific motors in the group.
+</Note>
+
+## Methods
+
+### spin()
+
+Spins all motors in the group at the specified voltage.
+
+<ParamField path="voltage" type="int">
+  Voltage to apply to motors (-127 to 127)
+</ParamField>
+
+```cpp
+intakeMtrs.spin(127);   // Full speed forward
+intakeMtrs.spin(-127);  // Full speed reverse
+```
+
+### stop()
+
+Stops all motors in the group with the specified brake mode.
+
+<ParamField path="mode" type="char">
+  Brake mode:
+  - `'c'` - Coast
+  - `'b'` - Brake
+  - `'h'` - Hold
+</ParamField>
+
+```cpp
+intakeMtrs.stop('c');  // Coast to a stop
+intakeMtrs.stop('b');  // Brake (faster stop)
+intakeMtrs.stop('h');  // Hold position
+```
+
+## Real-World Example
+
+Here's an example from actual driver control code:
+
+```cpp
+pros::Controller controller(pros::E_CONTROLLER_MASTER);
+keejLib::mtrs intake({-11});
+keejLib::mtrs puncher({-18});
+
+void opcontrol() {
+    while (true) {
+        bool r1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+        bool r2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
+        bool l1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
+        
+        // Control intake
+        if (r1) intake.spin(127);
+        else if (r2) intake.spin(-127);
+        else intake.stop('c');
+        
+        // Control puncher
+        if (l1) puncher.spin(127);
+        else puncher.stop('c');
+        
+        pros::delay(20);
+    }
+}
+```
+
+## Use Cases
+
+- **Intakes**: Control multiple intake motors together
+- **Catapults/Flywheels**: Synchronize launcher motors
+- **Lifts**: Control lift motors as a unit
+- **Any mechanism**: Group motors that should always move together
+
+<Note>
+  For drivetrain control with independent left/right sides, use [Differential Groups](/hardware/differential-groups) instead.
+</Note>
+
+## See Also
+
+- [Differential Groups](/hardware/differential-groups) - For drivetrains with independent left/right control
+- [Controller](/hardware/controller) - For reading controller inputs

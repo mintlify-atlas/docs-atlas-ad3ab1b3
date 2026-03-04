@@ -1,0 +1,431 @@
+---
+title: "Helper Functions"
+description: "Utility functions and classes for common robotics operations"
+---
+
+## Overview
+
+keejLib provides various helper functions and classes for common robotics tasks including filtering, range checking, sign functions, and more.
+
+## EMA Class
+
+The Exponential Moving Average (EMA) class provides a simple low-pass filter for smoothing noisy sensor data.
+
+### Constructor
+
+```cpp
+EMA(double ka);
+```
+
+**Parameters:**
+- `ka` (double): Smoothing factor (0-1)
+  - Values closer to 1.0 = less smoothing (faster response)
+  - Values closer to 0.0 = more smoothing (slower response)
+
+### Methods
+
+<ParamField path="out" type="double">
+  Process a new value through the filter and return the smoothed output.
+  
+  ```cpp
+  double out(double val);
+  ```
+  
+  **Parameters:**
+  - `val` (double): New input value
+  
+  **Returns:** Filtered output value
+  
+  **Algorithm:**
+  ```cpp
+  double EMA::out(double val) {
+      last = val * ka + last * (1 - ka);
+      return last;
+  }
+  ```
+</ParamField>
+
+<ParamField path="curr" type="double">
+  Returns the current filtered value without processing a new input.
+  
+  ```cpp
+  double curr();
+  ```
+  
+  **Returns:** Current filtered value
+</ParamField>
+
+### Usage Examples
+
+**Filtering Sensor Data:**
+```cpp
+// Create filter with 0.3 smoothing factor
+keejLib::EMA distanceFilter(0.3);
+
+while (true) {
+    double rawDistance = distanceSensor.get();
+    double filtered = distanceFilter.out(rawDistance);
+    
+    printf("Raw: %.2f, Filtered: %.2f\n", rawDistance, filtered);
+    pros::delay(10);
+}
+```
+
+**Smoothing IMU Data:**
+```cpp
+keejLib::EMA headingFilter(0.5);
+
+double getSmoothedHeading() {
+    double rawHeading = imu.get_heading();
+    return headingFilter.out(rawHeading);
+}
+```
+
+**Multiple Filters:**
+```cpp
+keejLib::EMA xFilter(0.4);
+keejLib::EMA yFilter(0.4);
+
+keejLib::Pt getFilteredPosition() {
+    keejLib::Pt raw = odom.getPosition();
+    return {
+        xFilter.out(raw.x),
+        yFilter.out(raw.y)
+    };
+}
+```
+
+## Mathematical Functions
+
+### sign
+
+Returns the sign of a number.
+
+```cpp
+template <typename T>
+int sign(T x);
+```
+
+**Parameters:**
+- `x` (T): Input value of any numeric type
+
+**Returns:**
+- `1` if x is positive or zero
+- `-1` if x is negative
+
+**Example:**
+```cpp
+int s1 = keejLib::sign(5.0);    // 1
+int s2 = keejLib::sign(-3.0);   // -1
+int s3 = keejLib::sign(0.0);    // 1
+
+// Useful for reversing motor direction
+int direction = keejLib::sign(joystickValue);
+motor.move(abs(joystickValue) * direction);
+```
+
+### inRange
+
+Checks if a value is within a specified range (inclusive).
+
+```cpp
+template <typename T>
+bool inRange(T val, std::pair<T, T> range);
+```
+
+**Parameters:**
+- `val` (T): Value to check
+- `range` (pair T, T): Range as min and max
+
+**Returns:** `true` if val is within range, `false` otherwise
+
+**Example:**
+```cpp
+bool isValid = keejLib::inRange(50, {0, 100});  // true
+isValid = keejLib::inRange(150, {0, 100});      // false
+
+// Check if robot is in scoring zone
+keejLib::Pt robotPos = chassis.getPosition();
+bool inScoringZone = keejLib::inRange(robotPos.x, {10.0, 30.0}) &&
+                     keejLib::inRange(robotPos.y, {10.0, 30.0});
+```
+
+## Enumerations
+
+### Color Enum
+
+Represents team colors in VEX competitions.
+
+```cpp
+enum Color {
+    red = 0,
+    blue = 1,
+    none = 2
+};
+```
+
+**Helper Function:**
+```cpp
+Color oppositeColor(Color c);
+```
+
+**Example:**
+```cpp
+keejLib::Color teamColor = keejLib::red;
+keejLib::Color opponentColor = keejLib::oppositeColor(teamColor);  // blue
+
+if (teamColor == keejLib::red) {
+    // Load red autonomous
+} else {
+    // Load blue autonomous
+}
+```
+
+### CompState Enum
+
+Represents different competition states.
+
+```cpp
+enum CompState {
+    autonomous,
+    teleop,
+    initialize
+};
+```
+
+**Example:**
+```cpp
+keejLib::CompState currentState = keejLib::autonomous;
+
+switch (currentState) {
+    case keejLib::autonomous:
+        runAuton();
+        break;
+    case keejLib::teleop:
+        runDriver();
+        break;
+    case keejLib::initialize:
+        initializeRobot();
+        break;
+}
+```
+
+## Structures and Types
+
+### ChassVelocities
+
+Stores left and right chassis velocities.
+
+```cpp
+struct ChassVelocities {
+    double left;
+    double right;
+};
+```
+
+**Example:**
+```cpp
+keejLib::ChassVelocities vel;
+vel.left = 100.0;
+vel.right = 80.0;
+
+chass.spinDiffy(vel.left, vel.right);
+```
+
+### Autons
+
+Stores autonomous routines with names.
+
+```cpp
+struct Autons {
+    std::vector<fptr> autonsList;
+    std::vector<std::string> names;
+};
+```
+
+Where `fptr` is defined as:
+```cpp
+typedef void(*fptr)();
+```
+
+**Example:**
+```cpp
+void redLeftAuton() { /* ... */ }
+void redRightAuton() { /* ... */ }
+void blueLeftAuton() { /* ... */ }
+
+keejLib::Autons autons;
+autons.autonsList = {redLeftAuton, redRightAuton, blueLeftAuton};
+autons.names = {"Red Left", "Red Right", "Blue Left"};
+
+// Select autonomous
+int selection = controller.select(autons.names);
+autons.autonsList[selection]();  // Run selected autonomous
+```
+
+## Macros
+
+### ALLBUTTONS
+
+Macro containing all controller buttons for use with controller wrapper.
+
+```cpp
+#define ALLBUTTONS {pros::E_CONTROLLER_DIGITAL_L1, \
+    pros::E_CONTROLLER_DIGITAL_L2, \
+    pros::E_CONTROLLER_DIGITAL_R1, \
+    pros::E_CONTROLLER_DIGITAL_R2, \
+    pros::E_CONTROLLER_DIGITAL_UP, \
+    pros::E_CONTROLLER_DIGITAL_DOWN, \
+    pros::E_CONTROLLER_DIGITAL_LEFT, \
+    pros::E_CONTROLLER_DIGITAL_RIGHT, \
+    pros::E_CONTROLLER_DIGITAL_X, \
+    pros::E_CONTROLLER_DIGITAL_B, \
+    pros::E_CONTROLLER_DIGITAL_Y, \
+    pros::E_CONTROLLER_DIGITAL_A}
+```
+
+### maxslew
+
+Maximum slew rate value.
+
+```cpp
+#define maxslew 254
+```
+
+### neg
+
+Negates an angle (360 - angle).
+
+```cpp
+#define neg(a) 360-a
+```
+
+**Example:**
+```cpp
+double angle = 45;
+double negated = neg(angle);  // 315
+```
+
+## Button Enumeration
+
+Controller button indices for use with the controller wrapper's `getAll()` method.
+
+```cpp
+enum buttons {
+    L1 = 0,      // L1 button pressed
+    NL1 = 1,     // L1 button newly pressed
+    L2 = 2,
+    NL2 = 3,
+    R1 = 4,
+    NR1 = 5,
+    R2 = 6,
+    NR2 = 7,
+    UP = 8,
+    NUP = 9,
+    DOWN = 10,
+    NDOWN = 11,
+    LEFT = 12,
+    NLEFT = 13,
+    RIGHT = 14,
+    NRIGHT = 15,
+    X = 16,
+    NX = 17,
+    B = 18,
+    NB = 19,
+    Y = 20,
+    NY = 21,
+    A = 22,
+    NA = 23
+};
+```
+
+<Info>
+  The 'N' prefix indicates a "new" press detection - the button was just pressed this cycle, not held from previous cycles.
+</Info>
+
+**Example:**
+```cpp
+std::vector<bool> buttons = controller.getAll(ALLBUTTONS);
+
+if (buttons[keejLib::L1]) {
+    // L1 is currently pressed
+}
+
+if (buttons[keejLib::NR1]) {
+    // R1 was just pressed (not held)
+    intake.toggle();
+}
+```
+
+## Complete Example: Filtered PID Control
+
+```cpp
+// Create EMA filters for smoother control
+keejLib::EMA errorFilter(0.4);
+keejLib::EMA outputFilter(0.6);
+
+void smoothPIDControl() {
+    keejLib::Stopwatch loopTimer;
+    
+    while (loopTimer.elapsed() < 3000) {
+        // Get raw error
+        double rawError = targetPos - currentPos;
+        
+        // Filter the error
+        double filteredError = errorFilter.out(rawError);
+        
+        // Calculate PID output
+        double rawOutput = pid.calculate(filteredError);
+        
+        // Filter the output for smoother motor control
+        double filteredOutput = outputFilter.out(rawOutput);
+        
+        // Apply direction
+        int direction = keejLib::sign(filteredOutput);
+        motor.move(filteredOutput);
+        
+        pros::delay(10);
+    }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Choosing EMA Smoothing Factor">
+    - **0.1-0.3**: Heavy smoothing, slow response - good for position data
+    - **0.4-0.6**: Moderate smoothing - good for velocity data
+    - **0.7-0.9**: Light smoothing, fast response - good for real-time control
+    - **Test different values** to find the right balance for your application
+  </Accordion>
+
+  <Accordion title="Using inRange for Deadbands">
+    ```cpp
+    double joystick = controller.get_analog(PROS_E_CONTROLLER_ANALOG_LEFT_Y);
+    
+    // Apply deadband
+    if (!keejLib::inRange(joystick, {-10.0, 10.0})) {
+        motor.move(joystick);
+    } else {
+        motor.brake();
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Organizing Autonomous Routines">
+    ```cpp
+    // Define all autonomous functions
+    void skillsAuton() { /* ... */ }
+    void redClose() { /* ... */ }
+    void blueFar() { /* ... */ }
+    
+    // Package them together
+    keejLib::Autons createAutonList() {
+        keejLib::Autons autons;
+        autons.autonsList = {skillsAuton, redClose, blueFar};
+        autons.names = {"Skills", "Red Close", "Blue Far"};
+        return autons;
+    }
+    ```
+  </Accordion>
+</AccordionGroup>

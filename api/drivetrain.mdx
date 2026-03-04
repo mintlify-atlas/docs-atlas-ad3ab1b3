@@ -1,0 +1,269 @@
+---
+title: DriveTrain
+description: Low-level motor control for differential drive robots
+---
+
+The `DriveTrain` class provides low-level control of left and right motor groups for differential drive robots.
+
+## Constructor
+
+```cpp
+DriveTrain(pros::MotorGroup* leftMotors, pros::MotorGroup* rightMotors, 
+           DriveTrainConstants dtConsts)
+```
+
+Creates a new DriveTrain object.
+
+<ParamField path="leftMotors" type="pros::MotorGroup*" required>
+  Pointer to the motor group controlling the left side of the drivetrain
+</ParamField>
+
+<ParamField path="rightMotors" type="pros::MotorGroup*" required>
+  Pointer to the motor group controlling the right side of the drivetrain
+</ParamField>
+
+<ParamField path="dtConsts" type="DriveTrainConstants" required>
+  Constants defining the physical characteristics of the drivetrain (see DriveTrainConstants struct)
+</ParamField>
+
+## DriveTrainConstants Struct
+
+```cpp
+struct DriveTrainConstants {
+    double gearRatio;
+    double cartridge;
+    double wheelDia;
+};
+```
+
+<ParamField path="gearRatio" type="double">
+  Gear ratio from motor to wheel (driven/driving). For example, if the motor drives a 60 tooth gear and the wheel has an 84 tooth gear, the ratio is 60/84 = 0.714
+</ParamField>
+
+<ParamField path="cartridge" type="double">
+  Motor cartridge RPM (200, 600, or 100 for V5 motors)
+</ParamField>
+
+<ParamField path="wheelDia" type="double">
+  Diameter of the drive wheels in inches
+</ParamField>
+
+## Motor Control Methods
+
+### spinVolts
+
+```cpp
+void spinVolts(ChassVelocities velocities)
+```
+
+Spins the left and right motors at specified voltages.
+
+<ParamField path="velocities" type="ChassVelocities" required>
+  Struct containing left and right motor voltages (-12000 to 12000 millivolts, or -127 to 127 in legacy units)
+</ParamField>
+
+**Example:**
+```cpp
+keejLib::ChassVelocities vel = {.left = 100, .right = 100};
+dt.spinVolts(vel); // Drive both sides forward at 100
+```
+
+### spinAll
+
+```cpp
+void spinAll(int volts)
+```
+
+Spins both left and right motors at the same voltage.
+
+<ParamField path="volts" type="int" required>
+  Voltage to apply to both motor groups (-127 to 127)
+</ParamField>
+
+**Example:**
+```cpp
+dt.spinAll(100); // Drive straight forward at 100
+dt.spinAll(0);   // Stop all motors
+```
+
+### spinLeft
+
+```cpp
+void spinLeft(int volts)
+```
+
+Spins only the left side motors.
+
+<ParamField path="volts" type="int" required>
+  Voltage to apply to left motor group (-127 to 127)
+</ParamField>
+
+**Example:**
+```cpp
+dt.spinLeft(100);  // Spin left side forward
+dt.spinRight(0);   // Keep right side stopped
+// Robot will pivot around right side
+```
+
+### spinRight
+
+```cpp
+void spinRight(int volts)
+```
+
+Spins only the right side motors.
+
+<ParamField path="volts" type="int" required>
+  Voltage to apply to right motor group (-127 to 127)
+</ParamField>
+
+**Example:**
+```cpp
+dt.spinLeft(0);    // Keep left side stopped
+dt.spinRight(100); // Spin right side forward
+// Robot will pivot around left side
+```
+
+### tare_position
+
+```cpp
+void tare_position()
+```
+
+Resets the encoder positions of all motors to zero. Useful for position tracking and encoder-based movements.
+
+**Example:**
+```cpp
+dt.tare_position(); // Reset all encoder positions to 0
+```
+
+## Sensor Query Methods
+
+### getLastCommanded
+
+```cpp
+double getLastCommanded()
+```
+
+Returns the last commanded voltage that was sent to the motors.
+
+**Returns:** Last commanded voltage value
+
+### getAvgVelocity
+
+```cpp
+double getAvgVelocity(bool volts = false)
+```
+
+Returns the average velocity of all drive motors.
+
+<ParamField path="volts" type="bool" default="false">
+  If true, returns velocity in voltage units; if false, returns velocity in RPM
+</ParamField>
+
+**Returns:** Average velocity across all motors
+
+**Example:**
+```cpp
+double rpm = dt.getAvgVelocity();      // Get velocity in RPM
+double volts = dt.getAvgVelocity(true); // Get velocity as voltage
+```
+
+### getAvgPosition
+
+```cpp
+double getAvgPosition()
+```
+
+Returns the average encoder position of all drive motors.
+
+**Returns:** Average position in motor degrees
+
+**Example:**
+```cpp
+dt.tare_position();
+// ... drive for some time ...
+double position = dt.getAvgPosition(); // Get distance traveled
+```
+
+## ChassVelocities Struct
+
+```cpp
+struct ChassVelocities {
+    double left;
+    double right;
+};
+```
+
+<ParamField path="left" type="double">
+  Left side motor velocity/voltage
+</ParamField>
+
+<ParamField path="right" type="double">
+  Right side motor velocity/voltage
+</ParamField>
+
+## Usage Example
+
+```cpp
+// Define motor groups
+pros::MotorGroup leftMotors({-1, -2, -3});  // Negative ports reverse direction
+pros::MotorGroup rightMotors({4, 5, 6});
+
+// Define drivetrain constants
+keejLib::DriveTrainConstants dtConsts = {
+    .gearRatio = 0.75,    // 48:64 gear ratio
+    .cartridge = 600,     // 600 RPM cartridge
+    .wheelDia = 3.25      // 3.25 inch wheels
+};
+
+// Create drivetrain
+keejLib::DriveTrain dt(&leftMotors, &rightMotors, dtConsts);
+
+// Basic driving
+dt.spinAll(100);  // Drive forward
+pros::delay(1000);
+dt.spinAll(0);    // Stop
+
+// Turn in place
+keejLib::ChassVelocities turnVel = {.left = 50, .right = -50};
+dt.spinVolts(turnVel);  // Spin clockwise
+pros::delay(500);
+dt.spinAll(0);
+
+// Tank drive control
+int leftJoy = controller.get_analog(ANALOG_LEFT_Y);
+int rightJoy = controller.get_analog(ANALOG_RIGHT_Y);
+keejLib::ChassVelocities vel = {.left = leftJoy, .right = rightJoy};
+dt.spinVolts(vel);
+
+// Check motor state
+dt.tare_position();
+// ... drive ...
+if (dt.getAvgPosition() > 360) {
+    dt.spinAll(0); // Stop after rotating wheels one full revolution
+}
+```
+
+## Integration with Chassis
+
+The DriveTrain class is typically used as a component of the Chassis class for higher-level autonomous control:
+
+```cpp
+// Create drivetrain
+keejLib::DriveTrain dt(&leftMotors, &rightMotors, dtConsts);
+
+// Pass to chassis for autonomous control
+keejLib::Chassis chassis(&dt, chassConsts, &imu, &vertEnc, &horizEnc);
+
+// But you can still use dt directly for manual control
+while (true) {
+    if (controller.get_digital(PROS_E_CONTROLLER_DIGITAL_L1)) {
+        // Manual override
+        dt.spinAll(127);
+    } else {
+        // Autonomous control through chassis
+        chassis.mtpoint({24, 24}, params);
+    }
+}
+```

@@ -1,0 +1,353 @@
+---
+title: Exit Conditions
+description: Exit condition classes for autonomous motion termination
+---
+
+## Exit (Base Class)
+
+Abstract base class for all exit conditions. Exit conditions determine when an autonomous movement should terminate.
+
+### Virtual Methods
+
+#### exited
+
+Pure virtual method that must be implemented by derived classes.
+
+```cpp
+virtual bool exited(exitParams params) = 0
+```
+
+<ParamField path="params" type="exitParams">
+  Structure containing current state information for evaluation
+</ParamField>
+
+**Returns:** `bool` - `true` if the exit condition has been met, `false` otherwise
+
+### exitParams
+
+Structure containing state information passed to exit condition evaluators.
+
+```cpp
+struct exitParams {
+    double error;
+    Pose pose;
+    Pt target;
+    Angle targetHeading;
+};
+```
+
+<ParamField path="error" type="double">
+  Current error value from the controller
+</ParamField>
+
+<ParamField path="pose" type="Pose">
+  Current robot pose (position and heading)
+</ParamField>
+
+<ParamField path="target" type="Pt">
+  Target point for the movement
+</ParamField>
+
+<ParamField path="targetHeading" type="Angle">
+  Target heading angle
+</ParamField>
+
+---
+
+## Timeout
+
+Exits after a specified time duration has elapsed.
+
+### Constructor
+
+```cpp
+exit::Timeout(int timeout)
+```
+
+<ParamField path="timeout" type="int">
+  Maximum time in milliseconds before exiting
+</ParamField>
+
+### Example Usage
+
+```cpp
+#include "keejLib/control.h"
+
+// Create a 2-second timeout
+keejLib::exit::Timeout timeoutExit(2000);
+
+void autonomousMove() {
+    keejLib::exitParams params;
+    
+    while (true) {
+        // Update params with current state
+        params.error = calculateError();
+        params.pose = getCurrentPose();
+        
+        if (timeoutExit.exited(params)) {
+            break; // Timeout reached
+        }
+        
+        // Continue movement
+        pros::delay(10);
+    }
+}
+```
+
+---
+
+## Range
+
+Exits when the error is within a specified range for a given duration.
+
+### Constructors
+
+```cpp
+exit::Range()
+exit::Range(double range, int timeout)
+```
+
+<ParamField path="range" type="double">
+  Maximum acceptable error magnitude
+</ParamField>
+
+<ParamField path="timeout" type="int">
+  Time in milliseconds the error must stay within range
+</ParamField>
+
+### Example Usage
+
+```cpp
+#include "keejLib/control.h"
+
+// Exit when error < 2.0 for 300ms
+keejLib::exit::Range rangeExit(2.0, 300);
+
+void moveToTarget() {
+    keejLib::exitParams params;
+    
+    while (true) {
+        params.error = getPositionError();
+        params.pose = getCurrentPose();
+        
+        if (rangeExit.exited(params)) {
+            break; // Within range for sufficient time
+        }
+        
+        updateMotors();
+        pros::delay(10);
+    }
+}
+```
+
+---
+
+## Perp
+
+Exits when the robot crosses a perpendicular line to the target direction.
+
+### Constructors
+
+```cpp
+exit::Perp()
+exit::Perp(Pt target)
+exit::Perp(Pt target, Angle targetHeading)
+```
+
+<ParamField path="target" type="Pt">
+  Target point to calculate perpendicular line from
+</ParamField>
+
+<ParamField path="targetHeading" type="Angle">
+  Optional target heading for perpendicular calculation
+</ParamField>
+
+### Methods
+
+#### computeSide
+
+Computes which side of the perpendicular line the robot is on.
+
+```cpp
+int computeSide(exitParams params)
+```
+
+<ParamField path="params" type="exitParams">
+  Current state parameters
+</ParamField>
+
+**Returns:** `int` - Side indicator (-1, 0, or 1)
+
+### Example Usage
+
+```cpp
+#include "keejLib/control.h"
+
+// Exit when robot crosses perpendicular to target
+keejLib::Pt targetPoint = {48.0, 48.0};
+keejLib::exit::Perp perpExit(targetPoint);
+
+void driveThrough() {
+    keejLib::exitParams params;
+    
+    while (true) {
+        params.pose = getCurrentPose();
+        params.target = targetPoint;
+        
+        if (perpExit.exited(params)) {
+            break; // Crossed the perpendicular
+        }
+        
+        driveForward();
+        pros::delay(10);
+    }
+}
+```
+
+---
+
+## Within
+
+Exits when the robot is within a specified distance of the target for a given duration.
+
+### Constructor
+
+```cpp
+exit::Within(Pt target, double range, int timeout)
+```
+
+<ParamField path="target" type="Pt">
+  Target point to measure distance to
+</ParamField>
+
+<ParamField path="range" type="double">
+  Maximum distance from target in inches
+</ParamField>
+
+<ParamField path="timeout" type="int">
+  Time in milliseconds to stay within range
+</ParamField>
+
+### Example Usage
+
+```cpp
+#include "keejLib/control.h"
+
+// Exit when within 3 inches of target for 200ms
+keejLib::Pt goalPoint = {60.0, 30.0};
+keejLib::exit::Within withinExit(goalPoint, 3.0, 200);
+
+void navigateToPoint() {
+    keejLib::exitParams params;
+    params.target = goalPoint;
+    
+    while (true) {
+        params.pose = getCurrentPose();
+        
+        if (withinExit.exited(params)) {
+            break; // Reached target position
+        }
+        
+        moveTowardTarget(goalPoint);
+        pros::delay(10);
+    }
+}
+```
+
+---
+
+## DistanceSensor
+
+Exits when a distance sensor detects an object within a threshold distance.
+
+### Constructor
+
+```cpp
+exit::DistanceSensor(
+    pros::Distance *distance,
+    double threshold,
+    int startDelay,
+    int delay
+)
+```
+
+<ParamField path="distance" type="pros::Distance*">
+  Pointer to PROS distance sensor object
+</ParamField>
+
+<ParamField path="threshold" type="double">
+  Detection threshold distance in millimeters
+</ParamField>
+
+<ParamField path="startDelay" type="int">
+  Initial delay in milliseconds before sensor readings are evaluated
+</ParamField>
+
+<ParamField path="delay" type="int">
+  Duration in milliseconds the sensor must detect object within threshold
+</ParamField>
+
+### Example Usage
+
+```cpp
+#include "keejLib/control.h"
+#include "pros/distance.hpp"
+
+// Setup distance sensor
+pros::Distance distSensor(1); // Port 1
+
+// Exit when object detected within 100mm for 150ms (after 500ms start delay)
+keejLib::exit::DistanceSensor sensorExit(&distSensor, 100.0, 500, 150);
+
+void driveUntilWall() {
+    keejLib::exitParams params;
+    
+    while (true) {
+        params.pose = getCurrentPose();
+        
+        if (sensorExit.exited(params)) {
+            break; // Object detected by sensor
+        }
+        
+        driveForward();
+        pros::delay(10);
+    }
+    
+    stopMotors();
+}
+```
+
+---
+
+## Combining Exit Conditions
+
+You can use multiple exit conditions in your autonomous routines by checking each one:
+
+```cpp
+#include "keejLib/control.h"
+
+keejLib::exit::Timeout maxTime(3000);      // 3 second max
+keejLib::exit::Range targetReached(2.0, 200); // Within 2 units for 200ms
+keejLib::Pt target = {48.0, 48.0};
+keejLib::exit::Within closeEnough(target, 5.0, 100);
+
+void smartMove() {
+    keejLib::exitParams params;
+    params.target = target;
+    
+    while (true) {
+        params.pose = getCurrentPose();
+        params.error = calculateError();
+        
+        // Exit if any condition is met
+        if (maxTime.exited(params) || 
+            targetReached.exited(params) || 
+            closeEnough.exited(params)) {
+            break;
+        }
+        
+        updateMovement();
+        pros::delay(10);
+    }
+}
+```

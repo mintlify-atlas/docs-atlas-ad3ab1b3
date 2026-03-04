@@ -1,0 +1,381 @@
+---
+title: 'Exit Conditions'
+description: 'Define when autonomous movements should stop using various exit condition strategies'
+---
+
+## Overview
+
+Exit conditions determine when an autonomous movement should terminate. keejLib provides multiple exit condition types that can be combined for robust movement control.
+
+All exit conditions inherit from the base `Exit` class and implement the `exited()` method.
+
+## Exit Base Class
+
+```cpp
+class Exit {
+public:
+    virtual ~Exit() = default;
+    virtual bool exited(exitParams params) = 0;
+};
+```
+
+### exitParams Struct
+
+Passed to all exit condition checks:
+
+```cpp
+struct exitParams {
+    double error;              // Current error value
+    Pose pose;                 // Robot's current pose (position + heading)
+    Pt target;                 // Target point
+    Angle targetHeading;       // Target heading
+};
+```
+
+## Exit Condition Types
+
+### Timeout
+
+Exits after a specified time has elapsed.
+
+```cpp
+keejLib::exit::Timeout(int timeout);
+```
+
+**Parameters:**
+- `timeout` - Time in milliseconds before exit
+
+**Use Cases:**
+- Safety timeout for all movements
+- Ensure robot doesn't get stuck
+- Time-based movements
+
+**Example:**
+```cpp
+// Exit after 2 seconds
+auto timeout = keejLib::exit::Timeout(2000);
+
+while (!timeout.exited(params)) {
+    // Movement code
+    pros::delay(10);
+}
+```
+
+**Implementation Details:**
+```cpp exit.cpp:8-12
+- Starts timing when constructed
+- Returns true when elapsed time > timeout
+- Uses Stopwatch internally for timing
+```
+
+---
+
+### Range
+
+Exits when error stays within a range for a specified duration.
+
+```cpp
+keejLib::exit::Range();
+keejLib::exit::Range(double range, int timeout);
+```
+
+**Parameters:**
+- `range` - Maximum error threshold (default constructor available)
+- `timeout` - Time in milliseconds to stay within range
+
+**Use Cases:**
+- Wait for movement to settle
+- Ensure robot reaches target accurately
+- Eliminate oscillations around target
+
+**Example:**
+```cpp
+// Exit when error < 1 inch for 200ms
+auto rangeExit = keejLib::exit::Range(1.0, 200);
+
+while (!rangeExit.exited(params)) {
+    params.error = target - current;
+    // Movement code
+    pros::delay(10);
+}
+```
+
+**Behavior:**
+```cpp exit.cpp:16-21
+- Timer resets if error exceeds range
+- Timer continues while error within range
+- Exits when timer exceeds timeout
+- Prevents premature exit during oscillations
+```
+
+---
+
+### Perp
+
+Exits when the robot crosses a perpendicular line to the target.
+
+```cpp
+keejLib::exit::Perp();
+keejLib::exit::Perp(Pt target);
+keejLib::exit::Perp(Pt target, Angle targetHeading);
+```
+
+**Parameters:**
+- `target` - Target point (optional, uses exitParams target if not provided)
+- `targetHeading` - Heading at target (optional, uses exitParams heading if not provided)
+
+**Use Cases:**
+- Exit when robot passes target point
+- Useful for high-speed movements
+- Don't wait for settling, just pass through
+
+**Example:**
+```cpp
+// Exit when crossing perpendicular to (24, 24)
+auto perpExit = keejLib::exit::Perp(Pt{24.0, 24.0});
+
+while (!perpExit.exited(params)) {
+    params.pose = chassis.getPose();
+    // Movement code
+    pros::delay(10);
+}
+```
+
+**How It Works:**
+```cpp exit.cpp:35-42
+- Computes which side of perpendicular line robot is on
+- Detects when robot crosses to opposite side
+- Returns true on first crossing detection
+- Uses computeSide() to determine position relative to line
+```
+
+---
+
+### Within
+
+Exits when robot stays within a radius of target point for specified duration.
+
+```cpp
+keejLib::exit::Within(Pt target, double range, int timeout);
+```
+
+**Parameters:**
+- `target` - Target point to measure distance to
+- `range` - Radius in distance units
+- `timeout` - Time in milliseconds to stay within range
+
+**Use Cases:**
+- Position-based exit (not error-based)
+- Move to point exits
+- Precise positioning requirements
+
+**Example:**
+```cpp
+// Exit when within 2 inches of (24, 24) for 250ms
+auto withinExit = keejLib::exit::Within(
+    Pt{24.0, 24.0},  // Target point
+    2.0,             // Range
+    250              // Timeout
+);
+
+while (!withinExit.exited(params)) {
+    params.pose = chassis.getPose();
+    // Movement code
+    pros::delay(10);
+}
+```
+
+**Behavior:**
+```cpp exit.cpp:46-51
+- Calculates distance from robot to target
+- Timer resets if distance > range
+- Timer continues while distance <= range
+- Exits when timer exceeds timeout
+```
+
+---
+
+### DistanceSensor
+
+Exits when a distance sensor detects an object within threshold.
+
+```cpp
+keejLib::exit::DistanceSensor(
+    pros::Distance *distance,
+    double threshold,
+    int startDelay,
+    int delay
+);
+```
+
+**Parameters:**
+- `distance` - Pointer to PROS distance sensor object
+- `threshold` - Detection distance in mm
+- `startDelay` - Time to wait before checking sensor (ms)
+- `delay` - Time sensor must detect object continuously (ms)
+
+**Use Cases:**
+- Detect game objects or field elements
+- Stop before collisions
+- Align against walls or posts
+- Conditional movements based on object presence
+
+**Example:**
+```cpp
+// Initialize distance sensor
+pros::Distance distSensor(10);  // Port 10
+
+// Exit when object within 50mm for 100ms, start checking after 500ms
+auto sensorExit = keejLib::exit::DistanceSensor(
+    &distSensor,  // Sensor pointer
+    50.0,         // Threshold (mm)
+    500,          // Start delay
+    100           // Detection delay
+);
+
+while (!sensorExit.exited(params)) {
+    // Movement code
+    pros::delay(10);
+}
+```
+
+**Behavior:**
+```cpp exit.cpp:57-62
+- Ignores sensor until startTimer completes
+- Starts delay timer when distance < threshold
+- Resets timer if distance >= threshold
+- Exits when delay timer completes
+- Prevents false positives from brief detections
+```
+
+## Combining Exit Conditions
+
+Use multiple exit conditions for robust movements:
+
+```cpp
+// Create multiple exit conditions
+auto timeout = keejLib::exit::Timeout(3000);        // 3 second max
+auto range = keejLib::exit::Range(1.0, 200);        // Within 1" for 200ms
+auto sensor = keejLib::exit::DistanceSensor(&dist, 50, 0, 100);
+
+// Check all conditions
+while (true) {
+    // Update params
+    params.error = target - current;
+    params.pose = chassis.getPose();
+    
+    // Exit if any condition met
+    if (timeout.exited(params)) {
+        std::cout << "Timeout exit" << std::endl;
+        break;
+    }
+    if (range.exited(params)) {
+        std::cout << "Range exit - target reached" << std::endl;
+        break;
+    }
+    if (sensor.exited(params)) {
+        std::cout << "Sensor exit - object detected" << std::endl;
+        break;
+    }
+    
+    // Movement code
+    pros::delay(10);
+}
+```
+
+## Usage with PID Movements
+
+```cpp
+// PID drive forward with multiple exit conditions
+void driveDistance(double target) {
+    // Setup PID
+    keejLib::PIDConstants drivePID = {
+        .kp = 5.0, .ki = 0.1, .kd = 0.5,
+        .kf = 0.0, .maxIntegral = 20.0,
+        .tolerance = 2.0, .integralThreshold = 10.0
+    };
+    keejLib::PID pid(drivePID);
+    
+    // Setup exit conditions
+    auto timeout = keejLib::exit::Timeout(2000);
+    auto range = keejLib::exit::Range(0.5, 150);
+    
+    keejLib::exitParams params;
+    
+    while (true) {
+        // Calculate error
+        double current = getEncoderPosition();
+        params.error = target - current;
+        
+        // Check exits
+        if (timeout.exited(params) || range.exited(params)) {
+            break;
+        }
+        
+        // Calculate and apply PID output
+        double output = pid.out(params.error);
+        motors.spin(output);
+        
+        pros::delay(10);
+    }
+    
+    motors.stop();
+}
+```
+
+## Usage with Move to Point
+
+```cpp
+void moveToPoint(Pt target) {
+    // Exit when within 2" of target for 200ms, max 3 seconds
+    auto within = keejLib::exit::Within(target, 2.0, 200);
+    auto timeout = keejLib::exit::Timeout(3000);
+    
+    keejLib::exitParams params;
+    params.target = target;
+    
+    while (true) {
+        // Update current pose
+        params.pose = chassis.getPose();
+        
+        // Check exits
+        if (within.exited(params) || timeout.exited(params)) {
+            break;
+        }
+        
+        // Move to point control code
+        // ...
+        
+        pros::delay(10);
+    }
+}
+```
+
+## Best Practices
+
+1. **Always use Timeout**: Prevents infinite loops if robot gets stuck
+
+2. **Range exit for precision**: Use Range exit for movements requiring settling
+
+3. **Perp for speed**: Use Perp exit when you just need to pass a point quickly
+
+4. **Within for positioning**: Use Within for absolute position requirements
+
+5. **Sensor for awareness**: Use DistanceSensor for environment interaction
+
+6. **Combine conditions**: Use multiple exits for different scenarios:
+   - Timeout (safety)
+   - Range/Within (success)
+   - Sensor (obstacle avoidance)
+
+7. **Appropriate timeouts**: Balance between:
+   - Too short: Premature exits
+   - Too long: Wasted time if stuck
+
+8. **Log exit reasons**: Help debug which condition caused exit
+
+## See Also
+
+- [PID Controller](/control/pid) - Use PID with exit conditions for closed-loop control
+- [Motion Profiling](/control/motion-profiling) - Combine exit conditions with profiled movements
+- [Velocity Management](/control/velocity-management) - Manage velocity constraints during movements

@@ -1,0 +1,86 @@
+---
+title: Introduction
+description: A C++ robotics library for PROS providing advanced chassis control and hardware abstractions
+---
+
+keejLib is a powerful C++ robotics library designed specifically for VEX Robotics teams using PROS. It provides high-level abstractions for common robotics tasks, making it easier to build competitive robots with advanced autonomous capabilities.
+
+## What is keejLib?
+
+keejLib simplifies robot programming by providing:
+
+- **Hardware abstractions** - Clean wrappers for motors, pistons, and controllers
+- **Advanced chassis control** - PID-based movement with odometry tracking
+- **Autonomous motion** - Move-to-point, boomerang controller, and motion profiling
+- **Utility functions** - Timer, angle handling, and geometric calculations
+- **Controller enhancements** - Built-in drive modes, button state tracking, and selection menus
+
+<Note>
+keejLib is built on top of PROS and requires a working PROS project. All features integrate seamlessly with the PROS API.
+</Note>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Motor groups" icon="gear">
+    Group motors together with support for differential drive. Control entire drivetrains with a single line of code.
+  </Card>
+  
+  <Card title="PID control" icon="bullseye">
+    Generic PID controller implementation with configurable constants for precise autonomous movement.
+  </Card>
+  
+  <Card title="Odometry" icon="location-dot">
+    Track robot position in real-time using tracking wheels and IMU for accurate autonomous navigation.
+  </Card>
+  
+  <Card title="Motion profiling" icon="chart-line">
+    Asymmetric trapezoidal motion profiles for smooth, controlled acceleration and deceleration.
+  </Card>
+</CardGroup>
+
+## Namespace
+
+All keejLib classes and functions are in the `keejLib` namespace:
+
+```cpp
+#include "keejLib/lib.h"
+
+// Use the namespace
+using namespace keejLib;
+
+// Or reference explicitly
+keejLib::Chassis myChass;
+```
+
+## Who uses keejLib?
+
+keejLib was developed and battle-tested by VEX team 2496R, competing at the 2023 VEX Worlds Championship. The library is designed for teams who want:
+
+- Advanced autonomous capabilities without starting from scratch
+- Clean, maintainable code structure
+- Proven algorithms used in competition
+- Flexibility to extend and customize
+
+## Design philosophy
+
+keejLib follows these principles:
+
+1. **Simplicity** - Common tasks should be easy, complex tasks should be possible
+2. **Performance** - Efficient code suitable for real-time robotics
+3. **Modularity** - Use only the components you need
+4. **Compatibility** - Works alongside standard PROS code
+
+## What's next?
+
+Ready to get started? Follow the installation guide to add keejLib to your project, then check out the quickstart to build your first program.
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Set up keejLib in your PROS project
+  </Card>
+  
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Build your first robot program
+  </Card>
+</CardGroup>

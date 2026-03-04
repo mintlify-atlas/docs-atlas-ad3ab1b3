@@ -1,0 +1,259 @@
+---
+title: "Pistons"
+description: "Control pneumatic pistons with toggle functionality"
+---
+
+## Overview
+
+The `Pis` class provides a convenient wrapper for controlling pneumatic pistons (or any digital outputs) with built-in state management and toggle functionality.
+
+## Class Definition
+
+```cpp
+namespace keejLib {
+    class Pis {
+        private:
+            std::vector<pros::adi::DigitalOut> pistons;
+            bool state;
+        
+        public:
+            Pis(std::vector<pros::adi::DigitalOut> p, bool s);
+    
+            void toggle();
+            void setState(bool iState);
+            bool getState();
+    };
+}
+```
+
+## Initialization
+
+Piston groups are initialized with existing `pros::adi::DigitalOut` objects and a starting state.
+
+<ParamField path="pistons" type="std::vector<pros::adi::DigitalOut>" required>
+  Vector of PROS ADI digital output objects
+</ParamField>
+
+<ParamField path="initialState" type="bool" required>
+  Starting state of the pistons (`true` = extended, `false` = retracted)
+</ParamField>
+
+```cpp
+// Create PROS digital output objects
+pros::adi::DigitalOut piston('B');
+pros::adi::DigitalOut intakePis('A');
+pros::adi::DigitalOut anglerPis('C');
+
+// Initialize piston groups with starting state
+keejLib::Pis tsukasa({piston}, false);              // Single piston, retracted
+keejLib::Pis intake({intakePis}, false);            // Single piston, retracted
+keejLib::Pis angler({anglerPis}, true);             // Single piston, extended
+keejLib::Pis doubleActing({piston1, piston2}, false); // Multiple pistons
+```
+
+<Note>
+  The constructor automatically sets the pistons to the specified initial state.
+</Note>
+
+## Methods
+
+### toggle()
+
+Toggles the state of all pistons in the group. If currently extended, they retract. If currently retracted, they extend.
+
+**Returns:** `void`
+
+```cpp
+tsukasa.toggle();  // Switches between extended and retracted
+```
+
+### setState()
+
+Sets the pistons to a specific state.
+
+<ParamField path="state" type="bool" required>
+  Desired state: `true` to extend, `false` to retract
+</ParamField>
+
+**Returns:** `void`
+
+```cpp
+tsukasa.setState(true);   // Extend pistons
+tsukasa.setState(false);  // Retract pistons
+```
+
+### getState()
+
+Returns the current state of the pistons.
+
+**Returns:** `bool` - `true` if extended, `false` if retracted
+
+```cpp
+if (tsukasa.getState()) {
+    // Pistons are currently extended
+    std::cout << "Pistons extended" << std::endl;
+}
+```
+
+## Real-World Examples
+
+### Basic Toggle Control
+
+```cpp
+pros::adi::DigitalOut intakePis('B');
+keejLib::Pis intake({intakePis}, false);
+
+void opcontrol() {
+    while (true) {
+        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP)) {
+            intake.toggle();
+        }
+        pros::delay(20);
+    }
+}
+```
+
+### Conditional Control
+
+```cpp
+pros::adi::DigitalOut intakePis('B');
+pros::adi::DigitalOut anglerPis('A');
+keejLib::Pis intake({intakePis}, false);
+keejLib::Pis angler({anglerPis}, false);
+
+void opcontrol() {
+    while (true) {
+        bool r1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+        bool r2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
+        
+        // Only allow intake to retract if it's currently extended
+        if (r2) angler.toggle();
+        if (r1 && intake.getState()) intake.toggle();
+        
+        pros::delay(20);
+    }
+}
+```
+
+### Competition Code Example
+
+Here's an example from actual competition code (VEX Worlds 2023):
+
+```cpp
+namespace robot {
+    pros::adi::DigitalOut anglerPis('A');
+    pros::adi::DigitalOut intakePis('B');
+    
+    keejLib::diffy chassMtrs({9, 8, 3, -1, -2, -20});
+    keejLib::mtrs intake({-11});
+    keejLib::Controller controller(pros_controller);
+    keejLib::Pis tsukasa({intakePis}, false);
+    keejLib::Pis angler({anglerPis}, false);
+}
+
+void opcontrol() {
+    while (true) {
+        std::vector<bool> state = robot::controller.getAll(ALLBUTTONS);
+        
+        // Drive control
+        robot::chassMtrs.spinDiffy(
+            robot::controller.drive(-1, keejLib::Controller::arcade)
+        );
+        
+        // Piston controls
+        if (state[keejLib::NR2]) robot::tsukasa.toggle();
+        if (state[keejLib::NR1] && robot::tsukasa.getState()) {
+            robot::tsukasa.toggle();
+        }
+        if (state[keejLib::NL2]) robot::angler.toggle();
+        if (state[keejLib::NUP]) robot::tsukasa.toggle();
+        
+        // Motor controls
+        if (state[keejLib::R1]) robot::intake.spin(127);
+        else if (state[keejLib::R2]) robot::intake.spin(-127);
+        else robot::intake.stop('c');
+        
+        pros::delay(20);
+    }
+}
+```
+
+## Using with keejLib Controller
+
+The piston class integrates seamlessly with keejLib's button state tracking:
+
+```cpp
+keejLib::Controller controller(pros_controller);
+keejLib::Pis intake({intakePis}, false);
+
+void opcontrol() {
+    while (true) {
+        // Get all button states
+        std::vector<bool> cont = controller.getAll(ALLBUTTONS);
+        
+        // NUP = "New UP" press (detects button press, not hold)
+        if (cont[keejLib::NUP]) intake.toggle();
+        
+        pros::delay(20);
+    }
+}
+```
+
+<Note>
+  Use "new press" button states (like `NUP`, `NR1`, etc.) with `toggle()` to prevent multiple toggles from a single button press.
+</Note>
+
+## Multiple Pistons
+
+You can control multiple physical pistons as a single group:
+
+```cpp
+pros::adi::DigitalOut piston1('A');
+pros::adi::DigitalOut piston2('B');
+pros::adi::DigitalOut piston3('C');
+
+// All three pistons will be controlled together
+keejLib::Pis wings({piston1, piston2, piston3}, false);
+
+// Toggle all three at once
+wings.toggle();
+```
+
+## Common Patterns
+
+### Toggle on Button Press
+
+```cpp
+if (cont[keejLib::NUP]) pistons.toggle();
+```
+
+### Set Specific State
+
+```cpp
+if (cont[keejLib::R1]) pistons.setState(true);   // Extend
+if (cont[keejLib::R2]) pistons.setState(false);  // Retract
+```
+
+### Conditional Toggle
+
+```cpp
+// Only toggle if currently extended
+if (cont[keejLib::NR1] && pistons.getState()) {
+    pistons.toggle();
+}
+```
+
+### State-Based Logic
+
+```cpp
+if (pistons.getState()) {
+    // Do something when extended
+} else {
+    // Do something when retracted
+}
+```
+
+## See Also
+
+- [Controller](/hardware/controller) - For button state tracking and "new press" detection
+- [Motor Groups](/hardware/motor-groups) - For controlling motors alongside pistons

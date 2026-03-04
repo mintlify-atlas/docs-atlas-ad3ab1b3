@@ -1,0 +1,284 @@
+---
+title: Chassis Setup
+description: Initialize and configure the keejLib Chassis class
+---
+
+This guide covers the complete setup process for the keejLib Chassis class, including hardware configuration, constant tuning, and initialization.
+
+## Hardware Requirements
+
+- Drive motors (left and right motor groups)
+- IMU sensor
+- Vertical tracking wheel with rotation sensor
+- Horizontal tracking wheel with rotation sensor
+- Optional: Distance sensor for wall reset
+
+## Configuration Structs
+
+### ChassConstants
+
+Defines the physical layout of your tracking wheels (chassis.h:13):
+
+```cpp
+struct ChassConstants {
+    double horizWidth;   // Distance from robot center to horizontal wheel (inches)
+    double vertWidth;    // Distance from robot center to vertical wheel (inches)
+    double trackDia;     // Tracking wheel diameter (inches) - if both wheels same size
+    double vertDia;      // Vertical tracking wheel diameter (inches)
+    double horizDia;     // Horizontal tracking wheel diameter (inches)
+};
+```
+
+**Example:**
+```cpp
+ChassConstants chassConsts = {
+    .horizWidth = 5.5,   // Horizontal wheel 5.5" from center
+    .vertWidth = 2.75,   // Vertical wheel 2.75" from center  
+    .trackDia = 2.75,    // 2.75" omni wheels (or set vertDia/horizDia separately)
+    .vertDia = 2.75,
+    .horizDia = 2.75
+};
+```
+
+### DriveTrainConstants
+
+Defines the drive motor configuration (chassis.h:21):
+
+```cpp
+struct DriveTrainConstants {
+    double gearRatio;    // Motor rotations per wheel rotation
+    double cartridge;    // Motor cartridge RPM (200, 300, 600)
+    double wheelDia;     // Drive wheel diameter (inches)
+};
+```
+
+**Example:**
+```cpp
+DriveTrainConstants dtConsts = {
+    .gearRatio = 0.6,    // 36:60 gear ratio (36/60 = 0.6)
+    .cartridge = 600,    // Blue (600 RPM) cartridge
+    .wheelDia = 3.25     // 3.25" wheels
+};
+```
+
+### MotionParams
+
+Controls movement behavior for each command (chassis.h:55):
+
+```cpp
+struct MotionParams {
+    bool async;           // Run movement in separate task
+    int timeout;          // Movement timeout (ms), default 3000
+    double vStart;        // Starting velocity
+    double vMin;          // Minimum velocity (for chaining)
+    double vMax;          // Maximum velocity (volts), default 127
+    double angMin;        // Minimum angular velocity
+    double angMax;        // Maximum angular velocity, default 127
+    double settleRange;   // Distance to consider "settled"
+    double settleTime;    // Time to remain in settle range
+    Exit* exit;           // Custom exit condition
+    double rotationCut;   // Not yet implemented
+    double drift;         // Drift compensation (0 = no drift)
+    bool reverse;         // Drive in reverse
+    double within;        // Stop when within this distance
+    double slew;          // Maximum acceleration (volts/10ms)
+    double turnBias;      // Not yet implemented
+    bool debug;           // Print debug info
+};
+```
+
+## Initialization
+
+### Step 1: Create Motor Groups
+
+```cpp
+// Left side motors (ports 1, 2, 3)
+pros::MotorGroup leftMotors({1, 2, 3}, pros::E_MOTOR_GEARSET_06);
+
+// Right side motors (ports 4, 5, 6) - reversed
+pros::MotorGroup rightMotors({-4, -5, -6}, pros::E_MOTOR_GEARSET_06);
+```
+
+### Step 2: Create Sensors
+
+```cpp
+// IMU on port 5
+pros::Imu imu(5);
+
+// Rotation sensors on ports 7 and 8
+pros::Rotation vertEnc(7);
+pros::Rotation horizEnc(8);
+
+// Optional: Distance sensor on port 9
+pros::Distance horizDist(9);
+```
+
+### Step 3: Create DriveTrain
+
+```cpp
+DriveTrainConstants dtConsts = {
+    .gearRatio = 0.6,
+    .cartridge = 600,
+    .wheelDia = 3.25
+};
+
+keejLib::DriveTrain driveTrain(&leftMotors, &rightMotors, dtConsts);
+```
+
+### Step 4: Initialize Chassis
+
+Two constructors are available (chassis.h:116-119):
+
+**With distance sensor:**
+```cpp
+keejLib::Chassis chassis(
+    &driveTrain,
+    chassConsts,
+    &imu,
+    &vertEnc,
+    &horizEnc,
+    &horizDist
+);
+```
+
+**Without distance sensor:**
+```cpp
+keejLib::Chassis chassis(
+    &driveTrain,
+    chassConsts,
+    &imu,
+    &vertEnc,
+    &horizEnc
+);
+```
+
+## PID Tuning
+
+### PID Constants Structure
+
+```cpp
+struct PIDConstants {
+    double kp;           // Proportional gain
+    double ki;           // Integral gain
+    double kd;           // Derivative gain
+    double tolerance;    // Error tolerance
+};
+```
+
+### Setting PID Constants
+
+```cpp
+// Linear movement (driveAngle)
+PIDConstants linConsts = {.kp = 15, .ki = 0, .kd = 0, .tolerance = 0};
+chassis.setLin(linConsts);
+
+// Angular correction (driveAngle)
+PIDConstants angConsts = {.kp = 2.5, .ki = 0, .kd = 0, .tolerance = 1};
+chassis.setAng(angConsts);
+
+// Pure turns
+PIDConstants turnConsts = {.kp = 3.5, .ki = 0, .kd = 0.1, .tolerance = 0};
+chassis.setTurn(turnConsts);
+
+// Move to point
+PIDConstants mtpLin = {.kp = 20, .ki = 0, .kd = 0, .tolerance = 0};
+PIDConstants mtpAng = {.kp = 4, .ki = 0, .kd = 0, .tolerance = 0};
+chassis.setMTP(mtpLin, mtpAng);
+
+// Move to pose
+PIDConstants mtposeLin = {.kp = 25, .ki = 0, .kd = 0, .tolerance = 0};
+PIDConstants mtposeAng = {.kp = 5, .ki = 0, .kd = 0, .tolerance = 0};
+chassis.setMTPose(mtposeLin, mtposeAng);
+```
+
+### Tuning Tips
+
+1. **Start with P**: Begin with only kp, set ki and kd to 0
+2. **Increase gradually**: Double kp until oscillation appears
+3. **Back off**: Reduce kp to 60-70% of oscillation point
+4. **Add D if needed**: Small kd (0.1-1.0) can reduce overshoot
+5. **Avoid I**: Integral is rarely needed and can cause instability
+
+## Start Tracking
+
+Before any movements, start the odometry task (odom.cpp:10):
+
+```cpp
+chassis.startTracking();
+```
+
+This creates a background task that updates the robot's position every 10ms.
+
+## Complete Example
+
+```cpp
+#include "main.h"
+#include "keejLib/chassis.h"
+
+// Global sensors
+pros::MotorGroup leftMotors({1, 2, 3}, pros::E_MOTOR_GEARSET_06);
+pros::MotorGroup rightMotors({-4, -5, -6}, pros::E_MOTOR_GEARSET_06);
+pros::Imu imu(5);
+pros::Rotation vertEnc(7);
+pros::Rotation horizEnc(8);
+
+// DriveTrain
+keejLib::DriveTrainConstants dtConsts = {
+    .gearRatio = 0.6,
+    .cartridge = 600,
+    .wheelDia = 3.25
+};
+keejLib::DriveTrain driveTrain(&leftMotors, &rightMotors, dtConsts);
+
+// Chassis constants
+keejLib::ChassConstants chassConsts = {
+    .horizWidth = 5.5,
+    .vertWidth = 2.75,
+    .trackDia = 2.75,
+    .vertDia = 2.75,
+    .horizDia = 2.75
+};
+
+// Initialize chassis
+keejLib::Chassis chassis(&driveTrain, chassConsts, &imu, &vertEnc, &horizEnc);
+
+void initialize() {
+    // Wait for IMU calibration
+    pros::delay(2000);
+    
+    // Configure PID constants
+    chassis.setLin({.kp = 15, .ki = 0, .kd = 0, .tolerance = 0});
+    chassis.setAng({.kp = 2.5, .ki = 0, .kd = 0, .tolerance = 1});
+    chassis.setTurn({.kp = 3.5, .ki = 0, .kd = 0.1, .tolerance = 0});
+    chassis.setMTP({.kp = 20, .ki = 0, .kd = 0}, {.kp = 4, .ki = 0, .kd = 0});
+    chassis.setMTPose({.kp = 25, .ki = 0, .kd = 0}, {.kp = 5, .ki = 0, .kd = 0});
+    
+    // Set starting pose
+    chassis.setPose({.pos = {0, 0}, .heading = keejLib::Angle(0, keejLib::HEADING)});
+    
+    // Start odometry
+    chassis.startTracking();
+}
+```
+
+## Measuring Tracking Wheel Offsets
+
+If you need precise offset measurements, use the built-in measurement tool (chassis.cpp:106):
+
+```cpp
+// Measure offsets over 10 iterations
+auto offsets = chassis.measureOffsets(10);
+std::cout << "Vertical offset: " << offsets.first << std::endl;
+std::cout << "Horizontal offset: " << offsets.second << std::endl;
+
+// Use alternate offsets
+chassis.setAlternateOffsets(offsets);
+chassis.useAlternateOffsets(true);
+```
+
+This rotates the robot and calculates actual offsets from encoder readings.
+
+## Next Steps
+
+- [Odometry](/chassis/odometry) - Learn about position tracking
+- [Movements](/chassis/movements) - Use movement commands

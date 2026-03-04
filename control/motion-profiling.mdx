@@ -1,0 +1,305 @@
+---
+title: 'Motion Profiling'
+description: 'Generate velocity profiles with acceleration and deceleration control for smooth autonomous movement'
+---
+
+## Overview
+
+Motion profiling allows you to generate smooth velocity profiles for autonomous movements with controlled acceleration and deceleration. This results in more predictable, consistent, and battery-efficient movement compared to raw PID control.
+
+keejLib implements 1D asymmetric trapezoidal motion profiling.
+
+## ProfileParams Struct
+
+Defines the motion profile parameters as percentage values (0 to 1):
+
+```cpp
+struct ProfileParams {
+    double speedPct;         // Target speed as percentage of max (0-1)
+    double accelPct;         // Acceleration rate as percentage of max (0-1)
+    double decelPct = 1;     // Deceleration rate as percentage of max (0-1)
+    double startPct = 0;     // Starting speed percentage (0-1)
+    double endPct = 0;       // Ending speed percentage (0-1)
+};
+```
+
+### Parameters Explained
+
+- **speedPct**: Maximum velocity for this movement (0.0 to 1.0)
+  - `1.0` = full speed, `0.5` = half speed
+  - Lower values for precise movements, higher for fast traversal
+
+- **accelPct**: How quickly to reach target speed (0.0 to 1.0)
+  - `1.0` = maximum acceleration, `0.3` = gentle acceleration
+  - Higher values = faster startup but more wheel slippage
+
+- **decelPct**: How quickly to slow down (0.0 to 1.0)
+  - Often set higher than accelPct for sharper stops
+  - `1.0` = maximum deceleration
+
+- **startPct**: Initial velocity (0.0 to 1.0)
+  - Use non-zero when chaining movements
+  - Allows smooth transitions between moves
+
+- **endPct**: Final velocity (0.0 to 1.0)
+  - Set to 0 for complete stop
+  - Set higher when continuing into next movement
+
+## ProfileLimits Struct
+
+Defines the physical limits of your robot in actual units:
+
+```cpp
+struct ProfileLimits {
+    double maxSpeed;   // Maximum velocity (distance/10ms)
+    double maxAccel;   // Maximum acceleration (distance/10ms²)
+    double maxDecel;   // Maximum deceleration (distance/10ms²)
+};
+```
+
+### Parameters Explained
+
+- **maxSpeed**: Robot's maximum achievable velocity
+  - Units: distance per 10ms (e.g., inches/10ms)
+  - Measured empirically at full motor power
+
+- **maxAccel**: Maximum acceleration rate
+  - Units: distance per 10ms²
+  - Forward acceleration (moving from stop to full speed)
+
+- **maxDecel**: Maximum deceleration rate
+  - Units: distance per 10ms²
+  - Can be higher than maxAccel (braking is often faster)
+
+## Generate Profile Function
+
+```cpp
+std::vector<double> generateProfile(double dist, ProfileParams pp, ProfileLimits pl);
+```
+
+Generates a velocity profile for a given distance with specified parameters and limits.
+
+**Parameters:**
+- `dist` - Distance to travel (in same units as ProfileLimits)
+- `pp` - ProfileParams defining the motion characteristics
+- `pl` - ProfileLimits defining robot physical constraints
+
+**Returns:**
+- Vector of velocity values (one per iteration) to follow
+
+**Profile Shape:**
+The generated profile follows a trapezoidal pattern:
+1. **Acceleration phase**: Ramp up from startPct to speedPct
+2. **Constant velocity phase**: Maintain speedPct
+3. **Deceleration phase**: Ramp down from speedPct to endPct
+
+For short distances, the profile may be triangular (no constant velocity phase).
+
+## Usage Examples
+
+### Basic Motion Profile
+
+```cpp
+// Define robot physical limits
+keejLib::ProfileLimits limits = {
+    .maxSpeed = 0.5,   // inches per 10ms
+    .maxAccel = 0.02,  // inches per 10ms²
+    .maxDecel = 0.03   // inches per 10ms²
+};
+
+// Define motion parameters
+keejLib::ProfileParams params = {
+    .speedPct = 0.8,   // 80% of max speed
+    .accelPct = 0.7,   // 70% of max acceleration
+    .decelPct = 1.0,   // 100% of max deceleration
+    .startPct = 0.0,   // Start from stop
+    .endPct = 0.0      // End at stop
+};
+
+// Generate profile for 24 inch movement
+auto profile = keejLib::generateProfile(24.0, params, limits);
+
+// Follow the profile
+for (size_t i = 0; i < profile.size(); i++) {
+    double targetVelocity = profile[i];
+    
+    // Use velocity controller to track profile
+    velocityController.setVelocity(targetVelocity);
+    double output = velocityController.getVoltage(getCurrentVelocity());
+    
+    motors.spin(output);
+    pros::delay(10);
+}
+```
+
+### Chained Movements
+
+For smooth transitions between movements, set `endPct` of first move to match `startPct` of next move:
+
+```cpp
+// First movement - don't stop at end
+keejLib::ProfileParams move1 = {
+    .speedPct = 0.8,
+    .accelPct = 0.7,
+    .decelPct = 0.5,
+    .startPct = 0.0,
+    .endPct = 0.4      // End at 40% speed
+};
+
+auto profile1 = keejLib::generateProfile(24.0, move1, limits);
+executeProfile(profile1);
+
+// Second movement - start at 40% speed
+keejLib::ProfileParams move2 = {
+    .speedPct = 0.6,
+    .accelPct = 0.7,
+    .decelPct = 1.0,
+    .startPct = 0.4,   // Start at 40% speed (matches move1 end)
+    .endPct = 0.0      // Stop at end
+};
+
+auto profile2 = keejLib::generateProfile(12.0, move2, limits);
+executeProfile(profile2);
+```
+
+### Precise vs Fast Movements
+
+**Precise movement (near obstacles):**
+```cpp
+keejLib::ProfileParams precise = {
+    .speedPct = 0.4,   // 40% speed
+    .accelPct = 0.5,   // Gentle acceleration
+    .decelPct = 0.6,   // Gentle deceleration
+    .startPct = 0.0,
+    .endPct = 0.0
+};
+```
+
+**Fast movement (open field):**
+```cpp
+keejLib::ProfileParams fast = {
+    .speedPct = 1.0,   // Full speed
+    .accelPct = 1.0,   // Maximum acceleration
+    .decelPct = 1.0,   // Maximum deceleration
+    .startPct = 0.0,
+    .endPct = 0.0
+};
+```
+
+## Measuring Robot Limits
+
+### Measuring maxSpeed
+
+```cpp
+// Run motors at full power and measure distance traveled
+motors.spin(127);
+pros::delay(1000);
+motors.stop();
+
+double distance = getEncoderPosition();
+double timeMs = 1000;
+maxSpeed = distance / (timeMs / 10);  // Convert to distance per 10ms
+```
+
+### Measuring maxAccel
+
+```cpp
+// Measure time to reach max speed from stop
+double startTime = pros::millis();
+motors.spin(127);
+
+while (getCurrentVelocity() < maxSpeed * 0.95) {
+    pros::delay(10);
+}
+
+double accelTime = pros::millis() - startTime;
+maxAccel = maxSpeed / (accelTime / 10);  // Distance per 10ms²
+```
+
+### Measuring maxDecel
+
+```cpp
+// Measure deceleration from full speed
+motors.spin(127);
+pros::delay(500);  // Get up to speed
+
+double startTime = pros::millis();
+motors.spin(-127);  // Brake
+
+while (getCurrentVelocity() > maxSpeed * 0.05) {
+    pros::delay(10);
+}
+
+double decelTime = pros::millis() - startTime;
+maxDecel = maxSpeed / (decelTime / 10);  // Distance per 10ms²
+```
+
+## Integration with Chassis
+
+The chassis class uses motion profiling internally with the robot constants:
+
+```cpp control.h:91-93
+struct ProfileLimits {
+    double maxSpeed, maxAccel, maxDecel;
+};
+```
+
+When using the chassis class, specify these in robotConstants:
+
+```cpp
+lib::robotConstants constants = {
+    .horizTrack = 10.5,
+    .vertTrack = 8.5,
+    .trackDia = 2.75,
+    .maxSpeed = 0.5,      // Motion profiling
+    .fwdAccel = 0.02,     // Forward acceleration
+    .fwdDecel = 0.03,     // Forward deceleration
+    .revAccel = 0.018,    // Reverse acceleration
+    .revDecel = 0.025,    // Reverse deceleration
+    .velToVolt = 254      // Velocity to voltage conversion
+};
+```
+
+## Benefits of Motion Profiling
+
+1. **Consistency**: Same movement profile every time, regardless of battery level
+2. **Battery Efficiency**: Controlled acceleration reduces current spikes
+3. **Predictability**: Known velocity at every point enables better path planning
+4. **Wheel Slippage**: Gradual acceleration prevents wheel spinning
+5. **Mechanical Stress**: Reduces wear on drivetrain components
+6. **Smooth Transitions**: Chain movements without stopping
+
+## Trapezoidal vs Triangular Profiles
+
+**Trapezoidal** (long distances):
+```
+Velocity
+    |
+    |     ___________
+    |    /           \
+    |   /             \
+    |__/               \__
+    |___________________
+         Time
+```
+
+**Triangular** (short distances):
+```
+Velocity
+    |
+    |       /\
+    |      /  \
+    |     /    \
+    |    /      \
+    |___/        \___
+    |_______________
+         Time
+```
+
+The function automatically determines which profile shape to use based on distance and parameters.
+
+## See Also
+
+- [PID Controller](/control/pid) - Used to track the generated velocity profile
+- [Velocity Management](/control/velocity-management) - Apply constraints and slew rate limiting
+- [Exit Conditions](/control/exit-conditions) - Determine when profiled movements complete

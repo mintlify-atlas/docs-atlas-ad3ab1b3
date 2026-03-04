@@ -1,0 +1,193 @@
+---
+title: "Differential Groups"
+description: "Control drivetrain motors with independent left and right side velocities"
+---
+
+## Overview
+
+Differential motor groups (`diffy`) are specialized motor groups designed for drivetrains. They allow you to control each half of your drivetrain with different velocities, which is essential for turning and precise movement.
+
+<Note>
+  Differential groups inherit all methods from regular motor groups, plus additional methods for differential control.
+</Note>
+
+## Initialization
+
+Differential groups must contain an even number of motors. When initializing with *2n* motors, the first *n* motors form the left side, and the second *n* motors form the right side.
+
+```cpp
+// 4-motor drivetrain: motors 1,2 = left, motors 3,4 = right
+keejLib::diffy chassMtrs({1, 2, 3, 4});
+
+// 6-motor drivetrain: motors 3,4,5 = left, motors -1,-2,-20 = right (reversed)
+keejLib::diffy chassMtrs({3, 4, 5, -1, -2, -20});
+```
+
+<Note>
+  Use negative port numbers to reverse motor direction. This is especially useful for drivetrain motors that face opposite directions.
+</Note>
+
+## Methods
+
+### spin()
+
+Spins all motors in the group at the same voltage (inherited from motor groups).
+
+<ParamField path="voltage" type="int">
+  Voltage to apply to all motors (-127 to 127)
+</ParamField>
+
+```cpp
+chassMtrs.spin(90);  // All motors forward at 90 voltage
+```
+
+### spinDiffy()
+
+Spins the left and right sides of the drivetrain with different velocities. This is the key method for differential control.
+
+<ParamField path="left" type="int" required>
+  Voltage for left side motors (-127 to 127)
+</ParamField>
+
+<ParamField path="right" type="int" required>
+  Voltage for right side motors (-127 to 127)
+</ParamField>
+
+```cpp
+// Turn right: left forward, right backward
+chassMtrs.spinDiffy(127, -100);
+
+// Drive forward
+chassMtrs.spinDiffy(100, 100);
+
+// Turn left in place
+chassMtrs.spinDiffy(-80, 80);
+```
+
+### spinDiffy() with ChassVelocities
+
+The `spinDiffy()` method can also accept a `ChassVelocities` struct, which is commonly returned by controller drive methods.
+
+<ParamField path="velocities" type="ChassVelocities">
+  Struct containing `left` and `right` voltage values
+</ParamField>
+
+```cpp
+keejLib::ChassVelocities velocities = {100, 100};
+chassMtrs.spinDiffy(velocities);
+```
+
+### stop()
+
+Stops all motors with the specified brake mode.
+
+<ParamField path="mode" type="char">
+  Brake mode: `'c'` (coast), `'b'` (brake), or `'h'` (hold)
+</ParamField>
+
+```cpp
+chassMtrs.stop('b');  // Brake all motors
+```
+
+## Integration with Controller
+
+Differential groups work seamlessly with the keejLib controller's `drive()` method:
+
+```cpp
+pros::Controller pros_controller(pros::E_CONTROLLER_MASTER);
+keejLib::Controller controller(pros_controller);
+keejLib::diffy chassMtrs({9, 8, 3, -1, -2, -20});
+
+void opcontrol() {
+    while (true) {
+        // One-line driver control with arcade drive
+        chassMtrs.spinDiffy(controller.drive(-1, keejLib::Controller::arcade));
+        
+        pros::delay(20);
+    }
+}
+```
+
+<Note>
+  The `drive()` method returns a `ChassVelocities` struct that can be passed directly to `spinDiffy()`.
+</Note>
+
+## Real-World Example
+
+Here's a complete example from competition code:
+
+```cpp
+namespace robot {
+    keejLib::diffy chassMtrs({9, 8, 3, -1, -2, -20});
+    keejLib::mtrs intake({-11});
+    keejLib::Controller controller(pros_controller);
+}
+
+void opcontrol() {
+    while (true) {
+        std::vector<bool> state = robot::controller.getAll(ALLBUTTONS);
+        
+        // Arcade drive with reversed direction
+        robot::chassMtrs.spinDiffy(
+            robot::controller.drive(-1, keejLib::Controller::arcade)
+        );
+        
+        // Control intake with R1/R2
+        if (state[keejLib::R1]) robot::intake.spin(127);
+        else if (state[keejLib::R2]) robot::intake.spin(-127);
+        else robot::intake.stop('c');
+        
+        pros::delay(20);
+    }
+}
+```
+
+## Drive Modes
+
+Differential groups support multiple drive control schemes through the controller:
+
+<CodeGroup>
+
+```cpp Arcade Drive
+// Left stick Y for forward/back, right stick X for turning
+chassMtrs.spinDiffy(controller.drive(1, keejLib::Controller::arcade));
+```
+
+```cpp Tank Drive
+// Left stick controls left side, right stick controls right side
+chassMtrs.spinDiffy(controller.drive(1, keejLib::Controller::tank));
+```
+
+```cpp Reverse Arcade
+// Same as arcade but with reversed controls
+chassMtrs.spinDiffy(controller.drive(1, keejLib::Controller::reverseArcade));
+```
+
+```cpp Curvature Drive
+// Curved response for smoother control
+chassMtrs.spinDiffy(controller.drive(1, keejLib::Controller::curvature));
+```
+
+</CodeGroup>
+
+## Motor Pairing
+
+Understanding how motors are paired is crucial:
+
+```cpp
+// Example with 6 motors
+keejLib::diffy chassMtrs({1, 2, 3, -4, -5, -6});
+//                         ^^^^^^^^   ^^^^^^^^^^
+//                         Left side  Right side
+```
+
+| Position | Motors | Side |
+|----------|--------|------|
+| First half (indices 0-2) | 1, 2, 3 | Left |
+| Second half (indices 3-5) | -4, -5, -6 | Right (reversed) |
+
+## See Also
+
+- [Motor Groups](/hardware/motor-groups) - Basic motor group functionality
+- [Controller](/hardware/controller) - Controller integration and drive modes
+- [Chassis](/api/chassis) - Advanced autonomous movement with differential groups

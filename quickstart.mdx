@@ -1,80 +1,465 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Build your first robot program with keejLib from installation to driving
 ---
 
-## Get started in three steps
+This guide walks you through creating a complete robot program using keejLib. You'll set up hardware, configure the chassis, and implement both autonomous and driver control.
 
-Get your documentation site running locally and make your first customization.
+## What you'll build
 
-### Step 1: Set up your local environment
+By the end of this guide, you'll have a robot that can:
+
+- Drive using arcade or tank control
+- Track its position using odometry
+- Execute autonomous movements with PID
+- Control intake and piston mechanisms
+
+<Note>
+This guide assumes you've already [installed keejLib](/installation) in your PROS project.
+</Note>
+
+## Project setup
+
+Start with a clean PROS project structure:
+
+```cpp src/main.cpp
+#include "main.h"
+#include "keejLib/lib.h"
+
+using namespace keejLib;
+```
+
+## Step 1: Define hardware
+
+Create global objects for your robot's hardware. This example uses a 6-motor drivetrain, IMU, tracking wheels, and basic mechanisms.
+
+```cpp src/main.cpp
+#include "main.h"
+#include "keejLib/lib.h"
+
+using namespace keejLib;
+
+// PROS controller
+pros::Controller master(pros::E_CONTROLLER_MASTER);
+
+// Motor ports (negative numbers reverse the motor)
+pros::MotorGroup leftMotors({1, 2, 3});
+pros::MotorGroup rightMotors({-4, -5, -6});
+pros::Motor intake(-11);
+
+// Sensors
+pros::Imu imu(10);
+pros::Rotation verticalEncoder(7);
+pros::Rotation horizontalEncoder(8);
+
+// Pneumatics
+pros::adi::DigitalOut clampPiston('A');
+```
+
+<Info>
+Port numbers should match your robot's configuration. Use negative numbers to reverse motor direction.
+</Info>
+
+## Step 2: Configure the chassis
+
+Set up the drivetrain and chassis with your robot's physical measurements.
+
+```cpp src/main.cpp
+// Drivetrain configuration
+DriveTrainConstants dtConsts = {
+    .gearRatio = 60.0/36.0,      // Driven / driving
+    .cartridge = 600,             // RPM of motor cartridge
+    .wheelDia = 3.25              // Inches
+};
+
+DriveTrain driveTrain(&leftMotors, &rightMotors, dtConsts);
+
+// Chassis tracking wheel positions (inches)
+ChassConstants chassConsts = {
+    .horizWidth = 5.5,    // Distance from center to horizontal wheel
+    .vertWidth = 2.0,     // Distance from center to vertical wheel  
+    .trackDia = 2.75,     // Tracking wheel diameter
+    .vertDia = 2.75,      // Vertical tracking wheel diameter
+    .horizDia = 2.75      // Horizontal tracking wheel diameter
+};
+
+// Create chassis object
+Chassis chassis(&driveTrain, chassConsts, &imu, 
+                &verticalEncoder, &horizontalEncoder);
+
+// Create controller wrapper
+Controller controller(master);
+
+// Create piston wrapper
+Pis clamp({clampPiston}, false);
+```
+
+<Warning>
+Measure your robot carefully! Incorrect measurements will cause odometry drift and inaccurate autonomous movements.
+</Warning>
+
+## Step 3: Configure PID constants
+
+Set up PID controllers for linear and angular movement.
+
+```cpp src/main.cpp
+void initialize() {
+    pros::lcd::initialize();
+    
+    // Wait for IMU calibration
+    pros::lcd::print(0, "Calibrating IMU...");
+    imu.reset();
+    while (imu.is_calibrating()) {
+        pros::delay(10);
+    }
+    pros::lcd::print(0, "IMU Ready!");
+    
+    // Linear PID constants (driving forward/back)
+    PIDConstants linearPID = {
+        .kp = 8.0,
+        .ki = 0.0,
+        .kd = 0.5,
+        .kf = 0.0,
+        .maxIntegral = 10.0,
+        .tolerance = 0.5,
+        .integralThreshold = 3.0
+    };
+    
+    // Angular PID constants (turning)
+    PIDConstants angularPID = {
+        .kp = 2.5,
+        .ki = 0.0,
+        .kd = 0.3,
+        .kf = 0.0,
+        .maxIntegral = 10.0,
+        .tolerance = 1.0,
+        .integralThreshold = 5.0
+    };
+    
+    // Set chassis PID constants
+    chassis.setConstants(linearPID, angularPID);
+    
+    // Set starting position (0, 0) facing 0 degrees
+    chassis.setPose({{0, 0}, Angle(0, HEADING)});
+    
+    // Start odometry tracking
+    chassis.startTracking();
+}
+```
+
+<Info>
+PID constants need tuning for your specific robot. Start with these values and adjust based on performance. Increase kP for faster response, kD for less overshoot.
+</Info>
+
+## Step 4: Implement driver control
+
+Create an intuitive driver control scheme using keejLib's controller features.
+
+```cpp src/main.cpp
+void opcontrol() {
+    // Set controller curves for smoother driving
+    controller.setCurves(5, 5);
+    
+    while (true) {
+        // Get all button states
+        std::vector<bool> buttons = controller.getAll(ALLBUTTONS);
+        
+        // Drive using arcade control (direction: 1 = forward)
+        ChassVelocities driveVels = controller.drive(1, Controller::arcade);
+        driveTrain.spinVolts(driveVels);
+        
+        // Intake controls
+        if (buttons[R1]) {
+            intake.move(127);  // Full speed forward
+        } else if (buttons[R2]) {
+            intake.move(-127); // Full speed reverse
+        } else {
+            intake.brake();    // Coast to stop
+        }
+        
+        // Clamp toggle (only on new press)
+        if (buttons[NL1]) {
+            clamp.toggle();
+        }
+        
+        // Display info on controller
+        Pose currentPose = chassis.getPose();
+        master.print(0, 0, "X:%.1f Y:%.1f", 
+                     currentPose.pos.x, currentPose.pos.y);
+        
+        pros::delay(20);
+    }
+}
+```
+
+<Steps>
+  <Step title="Drive modes">
+    keejLib supports multiple drive modes:
+    - `Controller::arcade` - Left stick forward/back, right stick turn
+    - `Controller::tank` - Left stick = left side, right stick = right side
+    - `Controller::curvature` - Curved arcade drive
+    - `Controller::reverseArcade` - Right stick drives, left turns
+  </Step>
+  
+  <Step title="Button states">
+    The `buttons` vector includes both held and new press states:
+    - `buttons[R1]` - True while R1 is held
+    - `buttons[NR1]` - True only on the first frame R1 is pressed
+    
+    Use the `buttons` enum for readable code: `L1`, `NL1`, `R2`, `NR2`, `A`, `NA`, etc.
+  </Step>
+</Steps>
+
+## Step 5: Create autonomous routine
+
+Implement an autonomous routine using chassis movement commands.
+
+```cpp src/main.cpp
+void autonomous() {
+    // Motion parameters for all movements
+    MotionParams defaultParams = {
+        .async = false,      // Wait for movement to complete
+        .timeout = 3000,     // 3 second timeout
+        .vMin = 20,          // Minimum voltage
+        .vMax = 127,         // Maximum voltage
+        .settleRange = 1.0,  // Settle within 1 inch
+        .settleTime = 100    // Settle for 100ms
+    };
+    
+    // Reset position at start
+    chassis.setPose({{0, 0}, Angle(0, HEADING)});
+    
+    // Grab the mobile goal
+    clamp.setState(false);
+    
+    // Drive forward 24 inches at 0 degrees
+    chassis.driveAngle(24, 0, defaultParams);
+    
+    // Clamp the goal
+    clamp.setState(true);
+    pros::delay(200);
+    
+    // Turn to 90 degrees
+    chassis.turn(90, defaultParams);
+    
+    // Move to point (24, 24) - uses move-to-point algorithm
+    chassis.mtpoint({24, 24}, defaultParams);
+    
+    // Start intake while moving
+    intake.move(127);
+    
+    // Drive to point (48, 24)
+    chassis.mtpoint({48, 24}, defaultParams);
+    
+    // Turn to face point (48, 48)
+    chassis.turnTo({48, 48}, defaultParams);
+    
+    // Drive forward to get ring
+    chassis.driveAngle(20, chassis.getTheta(), defaultParams);
+    
+    // Stop intake
+    intake.brake();
+    
+    // Return to start
+    chassis.mtpoint({0, 0}, defaultParams);
+}
+```
+
+<Info>
+All movements use odometry for accurate positioning. The robot tracks its position continuously and corrects for drift.
+</Info>
+
+## Available movement commands
+
+keejLib provides several autonomous movement options:
 
 <AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+  <Accordion title="driveAngle - Drive straight at an angle">
+    ```cpp
+    // Drive 24 inches at 45 degrees (absolute)
+    chassis.driveAngle(24, 45, params, true);
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
+    // Drive 12 inches at current heading + 30 degrees (relative)
+    chassis.driveAngle(12, 30, params, false);
+    ```
   </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+  
+  <Accordion title="turn - Turn to absolute heading">
+    ```cpp
+    // Turn to 90 degrees
+    chassis.turn(90, params);
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
+    // Turn to 180 degrees
+    chassis.turn(180, params);
+    ```
+  </Accordion>
+  
+  <Accordion title="turnTo - Turn to face a point">
+    ```cpp
+    // Turn to face point (24, 24)
+    chassis.turnTo({24, 24}, params);
+    ```
+  </Accordion>
+  
+  <Accordion title="mtpoint - Move to point">
+    ```cpp
+    // Move to coordinate (36, 24)
+    chassis.mtpoint({36, 24}, params);
+    ```
+    
+    Uses a boomerang controller for smooth curved paths.
+  </Accordion>
+  
+  <Accordion title="mtpose - Move to pose with heading">
+    ```cpp
+    // Move to (24, 24) facing 90 degrees
+    Pose target = {{24, 24}, Angle(90, HEADING)};
+    chassis.mtpose(target, 10, params);
+    ```
+    
+    Arrives at the point with a specific heading.
+  </Accordion>
+  
+  <Accordion title="swingTo - Swing turn to a point">
+    ```cpp
+    // Swing turn with 12 inch radius
+    chassis.swingTo({24, 24}, 12, params);
+    ```
   </Accordion>
 </AccordionGroup>
 
-### Step 2: Deploy your changes
+## Advanced: Tuning motion parameters
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+Customize movement behavior with `MotionParams`:
+
+```cpp
+MotionParams customParams = {
+    .async = true,           // Don't wait (async movement)
+    .timeout = 5000,         // 5 second timeout
+    .vStart = 0,             // Starting velocity
+    .vMin = 15,              // Minimum voltage (helps with friction)
+    .vMax = 100,             // Maximum voltage (limit speed)
+    .angMin = 0,             // Minimum angular voltage
+    .angMax = 127,           // Maximum angular voltage
+    .settleRange = 0.5,      // Must be within 0.5 inches
+    .settleTime = 150,       // Must settle for 150ms
+    .exit = nullptr,         // Custom exit condition (advanced)
+    .slew = 5,               // Slew rate (acceleration limit)
+    .reverse = false,        // Drive in reverse
+    .debug = false           // Print debug info
+};
+
+chassis.driveAngle(36, 0, customParams);
+
+if (customParams.async) {
+    // Do other things while moving
+    intake.move(127);
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    // Wait for movement to complete
+    chassis.waitUntilSettled();
+}
+```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Complete example
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+Here's the full working program:
 
-### Step 3: Go live
+```cpp src/main.cpp
+#include "main.h"
+#include "keejLib/lib.h"
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+using namespace keejLib;
+
+// Hardware
+pros::Controller master(pros::E_CONTROLLER_MASTER);
+pros::MotorGroup leftMotors({1, 2, 3});
+pros::MotorGroup rightMotors({-4, -5, -6});
+pros::Motor intake(-11);
+pros::Imu imu(10);
+pros::Rotation verticalEncoder(7);
+pros::Rotation horizontalEncoder(8);
+pros::adi::DigitalOut clampPiston('A');
+
+// keejLib objects
+DriveTrainConstants dtConsts = {60.0/36.0, 600, 3.25};
+DriveTrain driveTrain(&leftMotors, &rightMotors, dtConsts);
+
+ChassConstants chassConsts = {5.5, 2.0, 2.75, 2.75, 2.75};
+Chassis chassis(&driveTrain, chassConsts, &imu, 
+                &verticalEncoder, &horizontalEncoder);
+
+Controller controller(master);
+Pis clamp({clampPiston}, false);
+
+void initialize() {
+    pros::lcd::initialize();
+    imu.reset();
+    while (imu.is_calibrating()) pros::delay(10);
+    
+    PIDConstants linearPID = {8.0, 0.0, 0.5, 0.0, 10.0, 0.5, 3.0};
+    PIDConstants angularPID = {2.5, 0.0, 0.3, 0.0, 10.0, 1.0, 5.0};
+    
+    chassis.setConstants(linearPID, angularPID);
+    chassis.setPose({{0, 0}, Angle(0, HEADING)});
+    chassis.startTracking();
+}
+
+void autonomous() {
+    MotionParams params = {false, 3000, 0, 20, 127, 0, 127, 1.0, 100};
+    
+    chassis.setPose({{0, 0}, Angle(0, HEADING)});
+    chassis.driveAngle(24, 0, params);
+    clamp.setState(true);
+    pros::delay(200);
+    
+    intake.move(127);
+    chassis.mtpoint({24, 24}, params);
+    chassis.mtpoint({48, 24}, params);
+    intake.brake();
+}
+
+void opcontrol() {
+    controller.setCurves(5, 5);
+    
+    while (true) {
+        std::vector<bool> buttons = controller.getAll(ALLBUTTONS);
+        
+        ChassVelocities driveVels = controller.drive(1, Controller::arcade);
+        driveTrain.spinVolts(driveVels);
+        
+        if (buttons[R1]) intake.move(127);
+        else if (buttons[R2]) intake.move(-127);
+        else intake.brake();
+        
+        if (buttons[NL1]) clamp.toggle();
+        
+        pros::delay(20);
+    }
+}
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+You now have a working robot program! Here's what to explore next:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Chassis API" icon="car" href="/api/chassis">
+    Learn all chassis movement commands
+  </Card>
+  
+  <Card title="PID Control" icon="sliders" href="/control/pid">
+    Optimize your robot's movement with PID tuning
+  </Card>
+  
+  <Card title="Controller" icon="gamepad" href="/api/controller">
+    Advanced controller features
+  </Card>
+  
+  <Card title="Chassis Movements" icon="code" href="/chassis/movements">
+    Explore all movement algorithms
+  </Card>
 </CardGroup>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+Tune your PID constants! The values in this guide are starting points. Every robot is different and requires tuning for optimal performance.
 </Note>
