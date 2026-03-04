@@ -304,12 +304,21 @@ void initialize() {
 Here's complete driver control code from VEX Worlds 2023:
 
 ```cpp
+#include "main.h"
+#include "keejLib/lib.h"
+
 pros::Controller controller_pros(pros::E_CONTROLLER_MASTER);
+pros::adi::DigitalOut intakePis('A');
+pros::adi::DigitalOut expansionPis('B');
 
 namespace robot {
-    keejLib::diffy chassMtrs({9, 8, 3, -1, -2, -20});
-    keejLib::mtrs intake({-11});
-    keejLib::mtrs cata({-18});
+    pros::MotorGroup leftMotors({-1, -2, -3});
+    pros::MotorGroup rightMotors({4, 5, 6});
+    pros::MotorGroup intake({-11});
+    pros::MotorGroup cata({-18});
+    
+    keejLib::DriveTrainConstants dtConsts = {0.6, 600, 3.25};
+    keejLib::DriveTrain driveTrain(&leftMotors, &rightMotors, dtConsts);
     keejLib::Controller controller(controller_pros);
     keejLib::Pis tsukasa({intakePis}, false);
     keejLib::Pis expansion({expansionPis}, false);
@@ -323,22 +332,22 @@ void opcontrol() {
         // Get all button states
         std::vector<bool> cont = robot::controller.getAll(ALLBUTTONS);
         
-        // One-line arcade drive
-        robot::chassMtrs.spinDiffy(
-            robot::controller.drive(1, keejLib::Controller::arcade)
-        );
+        // Arcade drive control
+        keejLib::ChassVelocities driveVel = 
+            robot::controller.drive(1, keejLib::Controller::arcade);
+        robot::driveTrain.spinVolts(driveVel);
         
         // Intake control with held buttons
-        if (cont[keejLib::R1]) robot::intake.spin(127);
-        else if (cont[keejLib::R2]) robot::intake.spin(-127);
-        else robot::intake.stop('c');
+        if (cont[keejLib::R1]) robot::intake.move_voltage(12000);
+        else if (cont[keejLib::R2]) robot::intake.move_voltage(-12000);
+        else robot::intake.move_voltage(0);
         
         // Piston controls with new presses
         if (cont[keejLib::NR2]) robot::tsukasa.toggle();
         if (cont[keejLib::NUP]) robot::expansion.toggle();
         
         // Catapult control
-        if (cont[keejLib::NL1]) robot::cata.spin(127);
+        if (cont[keejLib::NL1]) robot::cata.move_voltage(12000);
         
         pros::delay(20);
     }

@@ -1,98 +1,167 @@
 ---
 title: "Motor Groups"
-description: "Group multiple motors together for synchronized control"
+description: "Using PROS motor groups with keejLib for synchronized motor control"
 ---
 
 ## Overview
 
-Motor groups allow you to control multiple motors as a single unit. keejLib provides a convenient wrapper around PROS motor groups that can be initialized using just port numbers.
-
-## Initialization
-
-Motor groups are initialized by passing a vector of port numbers to the constructor:
-
-```cpp
-keejLib::mtrs intakeMtrs({1, 2});
-keejLib::mtrs catapult({-3, 4});  // Negative port numbers reverse the motor
-```
+keejLib works with PROS's built-in `MotorGroup` class to control multiple motors as a single unit. Motor groups are essential for mechanisms like intakes, launchers, and lifts where multiple motors should move together.
 
 <Note>
-  Use negative port numbers to reverse the direction of specific motors in the group.
+keejLib doesn't provide its own motor group wrapper - it uses PROS `MotorGroup` directly. This guide shows you how to use PROS motor groups with keejLib components.
 </Note>
 
-## Methods
+## Creating Motor Groups
 
-### spin()
-
-Spins all motors in the group at the specified voltage.
-
-<ParamField path="voltage" type="int">
-  Voltage to apply to motors (-127 to 127)
-</ParamField>
+Motor groups are created using the PROS API:
 
 ```cpp
-intakeMtrs.spin(127);   // Full speed forward
-intakeMtrs.spin(-127);  // Full speed reverse
+pros::MotorGroup groupName({port1, port2, port3, ...});
 ```
 
-### stop()
+### Port Numbers
 
-Stops all motors in the group with the specified brake mode.
-
-<ParamField path="mode" type="char">
-  Brake mode:
-  - `'c'` - Coast
-  - `'b'` - Brake
-  - `'h'` - Hold
-</ParamField>
+- **Positive ports (1-21)**: Motor spins in default direction
+- **Negative ports (-1 to -21)**: Motor direction is reversed
 
 ```cpp
-intakeMtrs.stop('c');  // Coast to a stop
-intakeMtrs.stop('b');  // Brake (faster stop)
-intakeMtrs.stop('h');  // Hold position
+pros::MotorGroup intake({-11, -12});      // Two motors, reversed
+pros::MotorGroup flywheel({7, 8});        // Two motors, normal direction
+pros::MotorGroup lift({-5, 6, -13});      // Three motors, mixed directions
 ```
 
-## Real-World Example
+## Common PROS MotorGroup Methods
 
-Here's an example from actual driver control code:
+### move_voltage()
+
+Apply voltage to all motors in the group:
+
+```cpp
+intake.move_voltage(12000);  // Full speed forward (12V = 12000mV)
+intake.move_voltage(-12000); // Full speed reverse
+intake.move_voltage(0);      // Stop
+```
+
+### move_velocity()
+
+Set velocity target in RPM:
+
+```cpp
+flywheel.move_velocity(600);  // 600 RPM
+```
+
+### brake()
+
+Stop motors with specified brake mode:
+
+```cpp
+intake.brake();  // Use current brake mode
+```
+
+### set_brake_modes()
+
+Set how motors brake when stopped:
+
+```cpp
+#include "pros/motors.hpp"
+
+intake.set_brake_modes(pros::E_MOTOR_BRAKE_COAST);
+lift.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
+```
+
+## Using Motor Groups with keejLib
+
+### With DriveTrain
+
+Motor groups are primarily used with keejLib's `DriveTrain` class:
+
+```cpp
+pros::MotorGroup leftMotors({-1, -2, -3});
+pros::MotorGroup rightMotors({4, 5, 6});
+
+keejLib::DriveTrainConstants dtConsts = {
+    .gearRatio = 0.6,
+    .cartridge = 600,
+    .wheelDia = 3.25
+};
+
+keejLib::DriveTrain driveTrain(&leftMotors, &rightMotors, dtConsts);
+```
+
+### For Other Mechanisms
+
+For non-drivetrain mechanisms, use PROS motor groups directly:
 
 ```cpp
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
-keejLib::mtrs intake({-11});
-keejLib::mtrs puncher({-18});
+pros::MotorGroup intake({-11});
 
 void opcontrol() {
     while (true) {
-        bool r1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
-        bool r2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
-        bool l1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
-        
-        // Control intake
-        if (r1) intake.spin(127);
-        else if (r2) intake.spin(-127);
-        else intake.stop('c');
-        
-        // Control puncher
-        if (l1) puncher.spin(127);
-        else puncher.stop('c');
+        if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
+            intake.move_voltage(12000);
+        }
+        else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) {
+            intake.move_voltage(-12000);
+        }
+        else {
+            intake.move_voltage(0);
+        }
         
         pros::delay(20);
     }
 }
 ```
 
-## Use Cases
+## Complete Example
 
-- **Intakes**: Control multiple intake motors together
-- **Catapults/Flywheels**: Synchronize launcher motors
-- **Lifts**: Control lift motors as a unit
-- **Any mechanism**: Group motors that should always move together
+```cpp
+#include "main.h"
 
-<Note>
-  For drivetrain control with independent left/right sides, use [Differential Groups](/hardware/differential-groups) instead.
-</Note>
+// Create motor groups
+pros::MotorGroup leftDrive({-1, -2, -3});
+pros::MotorGroup rightDrive({4, 5, 6});
+pros::MotorGroup intake({-11, -12});
+pros::MotorGroup flywheel({7, 8});
+
+void initialize() {
+    // Configure brake modes
+    leftDrive.set_brake_modes(pros::E_MOTOR_BRAKE_COAST);
+    rightDrive.set_brake_modes(pros::E_MOTOR_BRAKE_COAST);
+    intake.set_brake_modes(pros::E_MOTOR_BRAKE_COAST);
+    flywheel.set_brake_modes(pros::E_MOTOR_BRAKE_COAST);
+}
+
+void opcontrol() {
+    pros::Controller controller(pros::E_CONTROLLER_MASTER);
+    
+    while (true) {
+        // Arcade drive
+        int forward = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int turn = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+        
+        leftDrive.move((forward + turn) * 127 / 100);
+        rightDrive.move((forward - turn) * 127 / 100);
+        
+        // Intake control
+        if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
+            intake.move_voltage(12000);
+        }
+        else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) {
+            intake.move_voltage(-12000);
+        }
+        else {
+            intake.move_voltage(0);
+        }
+        
+        pros::delay(20);
+    }
+}
+```
 
 ## See Also
 
-- [Differential Groups](/hardware/differential-groups) - For drivetrains with independent left/right control
-- [Controller](/hardware/controller) - For reading controller inputs
+- [DriveTrain API](/api/drivetrain) - Using motor groups with keejLib's DriveTrain class
+- [Chassis Setup](/chassis/setup) - Configure chassis with motor groups
+- [Controller](/hardware/controller) - Read controller inputs
+- [PROS Motor Groups Documentation](https://pros.cs.purdue.edu/v5/api/cpp/motors.html) - Full PROS motor API
